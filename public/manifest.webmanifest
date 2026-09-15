@@ -1,0 +1,20 @@
+{
+  "name": "NABILA FASHION — Premium Women's Boutique",
+  "short_name": "NABILA",
+  "description": "Premium women's fashion: sarees, three piece sets, abayas, gowns and accessories with cash on delivery across Bangladesh.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f6f4f6",
+  "theme_color": "#E91E63",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

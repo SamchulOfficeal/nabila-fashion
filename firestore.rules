@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function role(roleName) {
+      return signedIn() && profile().role == roleName;
+    }
+
+    function staff() {
+      return role('admin') || role('manager');
+    }
+
+    function admin() {
+      return role('admin');
+    }
+
+    match /products/{productId} {
+      allow read: if resource.data.isActive == true || staff();
+      allow create, delete: if admin();
+      allow update: if admin()
+        || (signedIn()
+          && request.resource.data.stock <= resource.data.stock
+          && request.resource.data.soldCount >= resource.data.soldCount);
+    }
+
+    match /categories/{categoryId} {
+      allow read: if resource.data.isActive == true || staff();
+      allow write: if staff();
+    }
+
+    match /users/{userId} {
+      allow read: if request.auth.uid == userId || admin();
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId || admin();
+      allow delete: if admin();
+    }
+
+    match /cartItems/{itemId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.userId;
+      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if signedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    match /wishlistItems/{itemId} {
+      allow read: if signedIn() && request.auth.uid == resource.data.userId;
+      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
+      allow update, delete: if signedIn() && request.auth.uid == resource.data.userId;
+    }
+
+    match /orders/{orderId} {
+      allow read: if signedIn() && (resource.data.userId == request.auth.uid || staff());
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update: if admin();
+      allow delete: if admin();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if true;
+      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if signedIn() && (resource.data.userId == request.auth.uid || staff());
+    }
+
+    match /coupons/{couponId} {
+      allow read: if resource.data.isActive == true || staff();
+      allow write: if staff();
+    }
+
+    match /banners/{bannerId} {
+      allow read: if resource.data.isActive == true || staff();
+      allow write: if staff();
+    }
+
+    match /legalPages/{pageId} {
+      allow read: if true;
+      allow write: if staff();
+    }
+
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if admin();
+    }
+
+    match /notifications/{notificationId} {
+      allow read, update: if staff();
+      allow create: if signedIn();
+      allow delete: if admin();
+    }
+  }
+}
