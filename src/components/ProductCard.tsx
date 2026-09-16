@@ -143,13 +143,13 @@ export function ProductCard({
       transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3), ease: [0.22, 1, 0.36, 1] }}
       className={cn("group relative h-full", className)}
     >
-      <div className="glass lift relative flex h-full flex-col overflow-hidden rounded-3xl p-2.5">
+      <div className="glass lift relative flex h-full flex-col overflow-hidden rounded-3xl p-2.5 transition-shadow duration-300 hover:shadow-xl">
         <div className="relative">
           <Link to={`/product/${product.slug}`} className="block">
             <SmartImage
               src={product.images[0]}
               alt={product.name}
-              width={700}
+              width={600}
               className="aspect-[4/5] rounded-2xl"
               imageClassName="transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105 group-hover:opacity-0"
             />
@@ -157,7 +157,7 @@ export function ProductCard({
               <SmartImage
                 src={hoverImage}
                 alt=""
-                width={700}
+                width={600}
                 className="pointer-events-none absolute inset-0 aspect-[4/5] rounded-2xl opacity-0 transition-opacity duration-500 group-hover:opacity-100"
                 imageClassName="transition-transform duration-700 ease-[cubic-bezier(0.22,1,0.36,1)] group-hover:scale-105"
               />
