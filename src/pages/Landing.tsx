@@ -116,7 +116,7 @@ export default function Landing() {
 
       {/* ---------------------------------------------------------------- hero */}
       <section className="relative pt-6 lg:pt-10">
-        <div className="glass relative overflow-hidden rounded-[2.25rem] p-2">
+        <div className="glass relative overflow-hidden rounded-[2.25rem] p-2 shadow-lg shadow-black/5">
           <div className="relative h-[520px] overflow-hidden rounded-[1.9rem] sm:h-[560px] lg:h-[600px]">
             <AnimatePresence mode="sync">
               {activeSlide && (
@@ -131,7 +131,7 @@ export default function Landing() {
                   <SmartImage
                     src={activeSlide.image}
                     alt={activeSlide.title}
-                    width={1800}
+                    width={1600}
                     eager
                     className="h-full w-full"
                   />
@@ -290,7 +290,7 @@ export default function Landing() {
             >
               <Link
                 to={`/shop?category=${category.slug}`}
-                className="glass lift block overflow-hidden rounded-3xl p-2.5"
+                className="glass lift block overflow-hidden rounded-3xl p-2.5 transition-shadow duration-300 hover:shadow-xl"
               >
                 <SmartImage
                   src={category.image}
@@ -344,11 +344,18 @@ export default function Landing() {
                 const { price, compareAt } = livePrice(product);
                 const off = discountPercent(price, compareAt);
                 return (
-                  <Link
+                  <motion.div
                     key={product._id}
-                    to={`/product/${product.slug}`}
-                    className="glass-soft lift group w-[220px] shrink-0 snap-start rounded-3xl p-2.5 sm:w-[240px]"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.5, delay: Math.min(index * 0.05, 0.3) }}
+                    className="w-[220px] shrink-0 snap-start sm:w-[240px]"
                   >
+                    <Link
+                      to={`/product/${product.slug}`}
+                      className="glass-soft group w-full rounded-3xl p-2.5 shadow-lg shadow-black/5 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl"
+                    >
                     <SmartImage
                       src={product.images[0]}
                       alt={product.name}
@@ -382,7 +389,8 @@ export default function Landing() {
                         {Math.max(0, product.stock)} left
                       </span>
                     </div>
-                  </Link>
+                    </Link>
+                  </motion.div>
                 );
               })}
             </div>

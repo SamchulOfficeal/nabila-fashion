@@ -507,7 +507,7 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
   };
 
   return (
-    <div className="glass rounded-[2rem] p-2.5">
+    <div className="glass rounded-[2rem] p-2.5 shadow-lg shadow-black/5">
       <div
         className="group relative aspect-[4/5] w-full cursor-zoom-in overflow-hidden rounded-[1.6rem] bg-muted"
         onMouseMove={(event) => {
@@ -612,7 +612,7 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
                   : "border-transparent opacity-70 hover:opacity-100",
               )}
             >
-              <SmartImage src={image} alt="" width={220} className="size-20" />
+              <SmartImage src={image} alt="" width={200} className="size-20" />
             </button>
           ))}
         </div>
