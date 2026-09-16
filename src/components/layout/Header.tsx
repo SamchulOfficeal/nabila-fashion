@@ -503,10 +503,10 @@ export function Header() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="absolute inset-x-0 top-full hidden border-t border-border/40 px-4 pb-6 lg:block"
+              className="absolute inset-x-0 top-full hidden border-t border-border/40 px-4 pb-6 before:absolute before:inset-x-0 before:top-0 before:h-3 before:bg-popover lg:block"
               onMouseEnter={() => setMegaOpen(true)}
             >
-              <div className="glass-strong mx-auto mt-3 grid w-full max-w-7xl grid-cols-[1.4fr_1fr] gap-4 rounded-3xl p-4">
+              <div className="bg-popover mx-auto mt-3 grid w-full max-w-7xl grid-cols-[1.4fr_1fr] gap-4 rounded-3xl border border-border/60 p-4 shadow-2xl shadow-black/20">
                 <div className="grid grid-cols-2 gap-2">
                   {(categories ?? []).map((category) => (
                     <Link
@@ -534,7 +534,7 @@ export function Header() {
                     </Link>
                   ))}
                 </div>
-                <div className="glass-soft relative overflow-hidden rounded-2xl p-4">
+                <div className="bg-muted/60 relative overflow-hidden rounded-2xl border border-border/40 p-4">
                   <SmartImage
                     src={(categories ?? [])[0]?.image}
                     alt="Featured collection"
