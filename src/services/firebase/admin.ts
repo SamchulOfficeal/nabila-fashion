@@ -4,7 +4,6 @@ export const getOverview = () => runQuery("admin.overview");
 export const listUsers = (search?: string) => runQuery("admin.listUsers", { search });
 export const setUserRole = (userId: string, role: string) => runMutation("admin.setRole", { userId, role });
 export const setUserBlocked = (userId: string, blocked: boolean) => runMutation("admin.setBlocked", { userId, blocked });
-export const claimFirstAdmin = () => runMutation("admin.claimAdmin");
 export const getResellerSummary = () => runQuery("admin.resellerSummary");
 export const listCoupons = () => runQuery("coupons.staffList");
 export const createCoupon = (payload: Record<string, unknown>) => runMutation("coupons.create", payload);

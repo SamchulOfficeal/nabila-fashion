@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getViewer, requireAdmin, requireStaff, requireUser, roleOf } from "./lib/access";
+import { getViewer, requireAdmin, requireStaff, roleOf } from "./lib/access";
 import { roleValidator } from "./schema";
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -198,36 +198,6 @@ export const setBlocked = mutation({
     const admin = await requireAdmin(ctx);
     if (args.userId === admin._id) throw new Error("You cannot suspend your own account.");
     await ctx.db.patch(args.userId, { blocked: args.blocked });
-  },
-});
-
-/**
- * Bootstrap: while the store has no administrator, the first real (non-guest)
- * signed in account can claim the admin role. Once an admin exists this is a no-op,
- * so the admin panel is never publicly claimable.
- */
-export const claimAdmin = mutation({
-  args: {},
-  handler: async (ctx) => {
-    const user = await requireUser(ctx);
-    if (user.isAnonymous) {
-      throw new Error("Sign in with an email address to claim administrator access.");
-    }
-    const admins = (await ctx.db.query("users").take(500)).filter(
-      (candidate) => candidate.role === "admin",
-    );
-    if (admins.length > 0) {
-      return { granted: false, role: roleOf(user) };
-    }
-    await ctx.db.patch(user._id, { role: "admin" });
-    await ctx.db.insert("notifications", {
-      type: "message",
-      title: "Store administrator created",
-      message: `${user.name ?? user.email ?? "The owner"} became the first administrator of NABILA FASHION.`,
-      isRead: false,
-      createdAt: Date.now(),
-    });
-    return { granted: true, role: "admin" as const };
   },
 });
 

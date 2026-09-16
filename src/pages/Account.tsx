@@ -7,7 +7,7 @@ import { api } from "@/services/firebase/api";
 import { BD_DIVISIONS } from "@/convex/lib/delivery";
 import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
-import { cn, formatDate } from "@/lib/utils";
+import { formatDate } from "@/lib/utils";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
 import {
   Copy,
@@ -37,7 +37,6 @@ export default function Account() {
   const { signOut } = useAuth();
   const profile = useQuery(api.profile.get);
   const saveProfile = useMutation(api.profile.save);
-  const claimAdmin = useMutation(api.admin.claimAdmin);
   const reseller = useQuery(api.admin.resellerSummary);
   const navigate = useNavigate();
 
@@ -49,7 +48,6 @@ export default function Account() {
     address: "",
   });
   const [busy, setBusy] = useState(false);
-  const [claiming, setClaiming] = useState(false);
   const prefilled = useRef(false);
 
   useEffect(() => {
@@ -90,23 +88,6 @@ export default function Account() {
       toast.error(error instanceof Error ? error.message : "Could not save your details");
     } finally {
       setBusy(false);
-    }
-  };
-
-  const onClaim = async () => {
-    setClaiming(true);
-    try {
-      const result = await claimAdmin({});
-      if (result.granted) {
-        toast.success("You are now the store administrator");
-        navigate("/admin");
-      } else {
-        toast.error("This store already has an administrator");
-      }
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not claim access");
-    } finally {
-      setClaiming(false);
     }
   };
 
@@ -368,36 +349,6 @@ export default function Account() {
             </ul>
           </div>
 
-          {!isStaff && (
-            <div className="glass rounded-3xl p-5">
-              <h2 className="font-display text-base font-semibold tracking-tight">
-                Store owner?
-              </h2>
-              {profile.isAnonymous ? (
-                <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                  Guest sessions cannot become administrators. Sign out and sign in with
-                  your email address to claim the store.
-                </p>
-              ) : (
-                <>
-                  <p className="mt-2 text-xs leading-5 text-muted-foreground">
-                    If NABILA FASHION is your store and no administrator exists yet, you
-                    can claim full control here. Once an administrator exists this option
-                    stops working.
-                  </p>
-                  <Button
-                    onClick={() => void onClaim()}
-                    disabled={claiming}
-                    variant="outline"
-                    className={cn("mt-4 cursor-pointer rounded-full")}
-                  >
-                    {claiming && <Loader2 className="size-4 animate-spin" />}
-                    Claim administrator access
-                  </Button>
-                </>
-              )}
-            </div>
-          )}
         </div>
       </section>
     </div>
