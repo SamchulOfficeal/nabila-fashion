@@ -237,6 +237,45 @@ const schema = defineSchema(
       key: v.string(),
       value: v.string(),
     }).index("key", ["key"]),
+
+    // Phase B: reseller withdrawals — requested by the reseller, approved and
+    // paid out by an admin. Balance itself is derived (see convex/reseller.ts).
+    withdrawals: defineTable({
+      userId: v.id("users"),
+      amount: v.number(),
+      method: v.union(
+        v.literal("bkash"),
+        v.literal("nagad"),
+        v.literal("bank"),
+      ),
+      accountNumber: v.string(),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("approved"),
+        v.literal("paid"),
+        v.literal("rejected"),
+      ),
+      note: v.optional(v.string()),
+      reviewedBy: v.optional(v.id("users")),
+      reviewedAt: v.optional(v.number()),
+      createdAt: v.number(),
+    })
+      .index("userId", ["userId"])
+      .index("status", ["status"]),
+
+    // Phase B: admin wallet adjustments (topup / deduction) recorded against a
+    // reseller. Positive amount = topup, negative = deduction.
+    walletAdjustments: defineTable({
+      userId: v.id("users"),
+      amount: v.number(),
+      type: v.union(
+        v.literal("topup"),
+        v.literal("deduction"),
+      ),
+      note: v.optional(v.string()),
+      createdBy: v.id("users"),
+      createdAt: v.number(),
+    }).index("userId", ["userId"]),
   },
   {
     schemaValidation: false,

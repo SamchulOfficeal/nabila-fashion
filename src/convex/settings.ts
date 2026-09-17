@@ -25,6 +25,8 @@ export const DEFAULTS = {
   paymentNagadNumber: "",
   courierPathaoPhone: "",
   courierSteadfastPhone: "",
+  // Phase B: reseller withdrawal floor. Admin-configurable from Settings.
+  resellerMinWithdrawal: "500",
 };
 
 export const publicConfig = query({
@@ -47,6 +49,7 @@ export const publicConfig = query({
       paymentBkashNumber: read("paymentBkashNumber"),
       paymentNagadEnabled: read("paymentNagadEnabled") === "true",
       paymentNagadNumber: read("paymentNagadNumber"),
+      resellerMinWithdrawal: Number(read("resellerMinWithdrawal")) || 500,
     };
   },
 });

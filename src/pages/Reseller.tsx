@@ -83,7 +83,15 @@ export default function Reseller() {
 
           <div className="mt-7 flex flex-wrap items-center gap-3">
             <Button asChild className="h-12 cursor-pointer rounded-full px-6 text-sm">
-              <Link to={isAuthenticated ? "/account" : "/auth?returnTo=/account"}>
+              <Link
+                to={
+                  isReseller
+                    ? "/reseller/dashboard"
+                    : isAuthenticated
+                      ? "/account"
+                      : "/auth?returnTo=/reseller/dashboard"
+                }
+              >
                 {isReseller ? "Open my reseller dashboard" : "Get my referral code"}
                 <ArrowRight className="size-4" strokeWidth={1.8} />
               </Link>
@@ -189,7 +197,15 @@ export default function Reseller() {
             asChild
             className="mt-auto h-12 w-full cursor-pointer rounded-full text-sm"
           >
-            <Link to={isAuthenticated ? "/account" : "/auth?returnTo=/account"}>
+            <Link
+              to={
+                isReseller
+                  ? "/reseller/dashboard"
+                  : isAuthenticated
+                    ? "/account"
+                    : "/auth?returnTo=/reseller/dashboard"
+              }
+            >
               {isReseller ? "See my earnings" : "Apply as a reseller"}
             </Link>
           </Button>

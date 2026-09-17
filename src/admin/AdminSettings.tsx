@@ -33,6 +33,7 @@ const FIELDS = [
   { key: "courierPathaoPhone", label: "Pathao account phone" },
   { key: "courierSteadfastPhone", label: "Steadfast account phone" },
   { key: "commissionDefault", label: "Default reseller commission (৳ per unit)", type: "number" },
+  { key: "resellerMinWithdrawal", label: "Minimum reseller withdrawal (৳)", type: "number" },
 ] as const;
 
 export function AdminSettings() {

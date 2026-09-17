@@ -48,6 +48,10 @@ const AdminLegal = lazy(() =>
 const AdminSettings = lazy(() =>
   import("./admin/AdminSettings").then((module) => ({ default: module.AdminSettings })),
 );
+const AdminResellers = lazy(() =>
+  import("./admin/AdminResellers").then((module) => ({ default: module.AdminResellers })),
+);
+const ResellerDashboard = lazy(() => import("./pages/ResellerDashboard.tsx"));
 
 // Simple loading fallback for route transitions
 function RouteLoading() {
@@ -156,6 +160,14 @@ createRoot(document.getElementById("root")!).render(
                 <Route path="/product/:slug" element={<ProductDetail />} />
                 <Route path="/cart" element={<Cart />} />
                 <Route path="/reseller" element={<Reseller />} />
+                <Route
+                  path="/reseller/dashboard"
+                  element={
+                    <RequireAuth>
+                      <ResellerDashboard />
+                    </RequireAuth>
+                  }
+                />
                 <Route path="/legal/:slug" element={<Legal />} />
                 <Route
                   path="/wishlist"
@@ -212,6 +224,14 @@ createRoot(document.getElementById("root")!).render(
                   }
                 />
                 <Route path="marketing" element={<AdminMarketing />} />
+                <Route
+                  path="resellers"
+                  element={
+                    <RoleRoute roles={["admin"]}>
+                      <AdminResellers />
+                    </RoleRoute>
+                  }
+                />
                 <Route path="legal" element={<AdminLegal />} />
                 <Route
                   path="settings"
