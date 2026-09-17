@@ -10,12 +10,15 @@ import { useAuth } from "@/hooks/use-auth";
 import { formatDate } from "@/lib/utils";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
 import {
+  BadgeCheck,
   Copy,
   Heart,
   LayoutDashboard,
   Loader2,
   LogOut,
+  MailCheck,
   Package,
+  RefreshCcw,
   Shield,
   Sparkles,
   TrendingUp,
@@ -34,7 +37,13 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function Account() {
   const { t, money } = useShop();
-  const { signOut } = useAuth();
+  const {
+    signOut,
+    user,
+    emailVerified,
+    requestVerificationEmail,
+    refreshVerification,
+  } = useAuth();
   const profile = useQuery(api.profile.get);
   const saveProfile = useMutation(api.profile.save);
   const reseller = useQuery(api.admin.resellerSummary);
@@ -49,6 +58,44 @@ export default function Account() {
   });
   const [busy, setBusy] = useState(false);
   const prefilled = useRef(false);
+  const [verifying, setVerifying] = useState(false);
+
+  const isVerified = emailVerified === true;
+  const hasEmail = Boolean(user?.email);
+
+  const handleSendVerification = async () => {
+    setVerifying(true);
+    try {
+      const sent = await requestVerificationEmail();
+      toast.success(
+        sent
+          ? `Verification link sent to ${user?.email}`
+          : "This email is already verified.",
+      );
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not send the verification email",
+      );
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const handleRefreshVerification = async () => {
+    setVerifying(true);
+    try {
+      const refreshed = await refreshVerification();
+      if (refreshed?.emailVerified) {
+        toast.success("Email verified — thank you!");
+      } else {
+        toast.info("Still unverified. Click the link in your inbox first, then retry.");
+      }
+    } catch (error) {
+      toast.error("Could not refresh verification status");
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   useEffect(() => {
     if (prefilled.current || !profile) return;
@@ -108,8 +155,20 @@ export default function Account() {
               <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">
                 {profile.name || "NABILA customer"}
               </h1>
-              <p className="text-xs text-muted-foreground">
+              <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {profile.email || "Guest session"}
+                {hasEmail &&
+                  (isVerified ? (
+                    <BadgeCheck
+                      className="size-3.5 text-emerald-600"
+                      strokeWidth={2}
+                      aria-label="Email verified"
+                    />
+                  ) : (
+                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-700 dark:bg-amber-950 dark:text-amber-300">
+                      UNVERIFIED
+                    </span>
+                  ))}
               </p>
             </div>
           </div>
@@ -335,6 +394,56 @@ export default function Account() {
         </div>
 
         <div className="space-y-4">
+          {hasEmail && (
+            <div className="glass rounded-3xl p-5">
+              <div className="flex items-center gap-2">
+                <MailCheck className="size-4 text-primary" strokeWidth={1.8} />
+                <h2 className="font-display text-base font-semibold tracking-tight">
+                  Email verification
+                </h2>
+              </div>
+              {isVerified ? (
+                <p className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
+                  <BadgeCheck className="size-4 text-emerald-600" strokeWidth={2} />
+                  Your email is verified. Order updates land in your inbox.
+                </p>
+              ) : (
+                <>
+                  <p className="mt-3 text-xs leading-5 text-muted-foreground">
+                    Verify <strong className="text-foreground">{user?.email}</strong> so
+                    you can reset your password and receive order confirmations. Click
+                    the link in your inbox, then press refresh here.
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={verifying}
+                      onClick={() => void handleSendVerification()}
+                      className="cursor-pointer rounded-full"
+                    >
+                      {verifying ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <MailCheck className="size-4" strokeWidth={1.8} />
+                      )}
+                      Send verification link
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={verifying}
+                      onClick={() => void handleRefreshVerification()}
+                      className="cursor-pointer rounded-full"
+                    >
+                      <RefreshCcw className="size-4" strokeWidth={1.8} />
+                      I verified — refresh
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           <div className="glass rounded-3xl p-5">
             <div className="flex items-center gap-2">
               <Shield className="size-4 text-primary" strokeWidth={1.8} />

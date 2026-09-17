@@ -41,6 +41,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     isAuthenticated,
     signIn,
     signInGoogle,
+    requestPasswordReset,
     authError,
   } = useAuth();
   const navigate = useNavigate();
@@ -55,6 +56,9 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mode, setMode] = useState<"signIn" | "signUp">("signIn");
+  const [resetMode, setResetMode] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
@@ -104,6 +108,23 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
       setError("The verification code you entered is incorrect.");
       setIsLoading(false);
       setOtp("");
+    }
+  };
+
+  const handleResetSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setIsLoading(true);
+    setError(null);
+    try {
+      const email = String(new FormData(event.currentTarget).get("email") ?? "").trim();
+      setResetEmail(email);
+      await requestPasswordReset(email);
+      setResetSent(true);
+    } catch (resetError) {
+      console.error("Password reset error:", resetError);
+      setError(authError(resetError));
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -188,7 +209,102 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           transition={{ duration: 0.55, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
           className="glass flex flex-col justify-center rounded-[2rem] p-6 sm:p-10"
         >
-          {step === "signIn" ? (
+          {step === "signIn" ? resetMode ? (
+            <>
+              <Link to="/" className="mb-6 flex items-center gap-2.5 lg:hidden">
+                <span className="grid size-9 place-items-center rounded-xl bg-primary font-display text-sm font-bold text-primary-foreground">
+                  N
+                </span>
+                <span className="font-display text-sm font-semibold tracking-tight">
+                  NABILA FASHION
+                </span>
+              </Link>
+              <h1 className="font-display text-3xl font-semibold tracking-tight">
+                Reset your password
+              </h1>
+              {resetSent ? (
+                <>
+                  <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                    If an account exists for <strong>{resetEmail}</strong>, a secure reset
+                    link is on its way. Check your inbox — and spam — then sign in with
+                    the new password.
+                  </p>
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setResetMode(false);
+                      setResetSent(false);
+                      setError(null);
+                    }}
+                    className="mt-6 h-12 w-full cursor-pointer rounded-xl"
+                  >
+                    Back to sign in
+                    <ArrowRight className="size-4" strokeWidth={1.8} />
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                    Enter your account email and we&apos;ll send a secure link to set a
+                    new password.
+                  </p>
+                  <form onSubmit={handleResetSubmit} className="mt-7">
+                    <label className="text-xs font-medium" htmlFor="reset-email">
+                      Email address
+                    </label>
+                    <div className="relative mt-2">
+                      <Mail
+                        className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
+                        strokeWidth={1.8}
+                      />
+                      <Input
+                        id="reset-email"
+                        name="email"
+                        placeholder="name@example.com"
+                        type="email"
+                        className="h-12 rounded-xl pl-9"
+                        disabled={isLoading}
+                        required
+                      />
+                    </div>
+                    {error && (
+                      <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                        {error}
+                      </p>
+                    )}
+                    <Button
+                      type="submit"
+                      disabled={isLoading}
+                      className="mt-5 h-12 w-full cursor-pointer rounded-xl"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <>
+                          Send reset link
+                          <ArrowRight className="size-4" strokeWidth={1.8} />
+                        </>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      disabled={isLoading}
+                      onClick={() => {
+                        setResetMode(false);
+                        setResetSent(false);
+                        setError(null);
+                      }}
+                      className="mt-2 h-11 w-full cursor-pointer rounded-xl text-xs"
+                    >
+                      <RefreshCcw className="size-3.5" strokeWidth={1.8} />
+                      Back to sign in
+                    </Button>
+                  </form>
+                </>
+              )}
+            </>
+          ) : (
             <>
               <Link to="/" className="mb-6 flex items-center gap-2.5 lg:hidden">
                 <span className="grid size-9 place-items-center rounded-xl bg-primary font-display text-sm font-bold text-primary-foreground">
@@ -244,6 +360,21 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
                 <p className="mt-2 text-[11px] text-muted-foreground">
                   {mode === "signUp" ? "Use at least 6 characters." : "Use your Firebase account password."}
                 </p>
+                {mode === "signIn" && (
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetMode(true);
+                        setResetSent(false);
+                        setError(null);
+                      }}
+                      className="cursor-pointer text-xs font-medium text-primary hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+                )}
                 <div className="mt-4 flex justify-end">
                   <Button
                     type="submit"
