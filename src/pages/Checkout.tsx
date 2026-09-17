@@ -12,6 +12,7 @@ import {
   nearestDivision,
 } from "@/convex/lib/delivery";
 import { useShop } from "@/context/app-context";
+import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { cn } from "@/lib/utils";
 import { useAction, useMutation, useQuery } from "@/services/firebase/hooks";
@@ -36,6 +37,7 @@ import { toast } from "sonner";
 export default function Checkout() {
   const { t, money, freeDeliveryThreshold } = useShop();
   const { items, subtotal, count, isLoading } = useCart();
+  const { user } = useAuth();
   const profile = useQuery(api.profile.get);
   const placeOrder = useMutation(api.orders.placeOrder);
   const dispatchAlert = useAction(api.notify.dispatchOrderAlert);
@@ -195,7 +197,8 @@ export default function Checkout() {
         description: `৳${result.total.toLocaleString()} payable on delivery.`,
       });
 
-      // Outbound alert channel (webhook / email) — never blocks the order.
+      // Outbound channels (customer confirmation email, staff webhook/email) —
+      // never block the order on notification failures.
       void dispatchAlert({
         orderNumber: result.orderNumber,
         customerName: form.name,
@@ -203,6 +206,7 @@ export default function Checkout() {
         division: form.division,
         total: result.total,
         itemCount: count,
+        customerEmail: user?.email ?? undefined,
       }).catch(() => undefined);
 
       navigate("/orders");
