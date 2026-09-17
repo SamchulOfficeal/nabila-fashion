@@ -228,7 +228,7 @@ export function Header() {
           </Sheet>
 
           <Link to="/" className="flex items-center gap-2.5">
-            <img src={logoUrl} alt="" className="size-9 rounded-xl object-cover" />
+            <img src={logoUrl} alt="" loading="eager" decoding="async" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/auravelle-mark.svg"; }} className="size-9 rounded-xl object-cover" />
             <span className="hidden flex-col leading-none sm:flex">
               <span className="font-display text-[15px] font-semibold tracking-tight">
                 {storeName}

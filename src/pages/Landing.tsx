@@ -415,7 +415,7 @@ export default function Landing() {
             </Button>
           }
         />
-        <div className="mt-7 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mt-7 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {(featured ?? []).map((product, index) => (
             <ProductCard key={product._id} product={product} index={index} />
           ))}
@@ -458,7 +458,7 @@ export default function Landing() {
       {/* ------------------------------------------------------ new arrivals */}
       <section className="pt-20">
         <SectionHeading eyebrow={t("section.newInHint")} title={t("section.newIn")} />
-        <div className="mt-7 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        <div className="mt-7 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {(newest ?? []).map((product, index) => (
             <ProductCard key={product._id} product={product} index={index} />
           ))}

@@ -24,6 +24,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import {
   ChevronLeft,
   ChevronRight,
+  Gem,
   Heart,
   Loader2,
   Minus,
@@ -483,6 +484,7 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
   const images = product.images.length > 0 ? product.images : [""];
   const [index, setIndex] = useState(0);
   const [loaded, setLoaded] = useState(false);
+  const [failed, setFailed] = useState(false);
   const [origin, setOrigin] = useState<{ x: number; y: number } | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
 
@@ -490,6 +492,7 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
     if (images.length < 2) return;
     const timer = window.setInterval(() => {
       setLoaded(false);
+      setFailed(false);
       setIndex((current) => (current + 1) % images.length);
     }, 5000);
     return () => window.clearInterval(timer);
@@ -497,12 +500,14 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
 
   const step = (delta: number) => {
     setLoaded(false);
+    setFailed(false);
     setIndex((current) => (current + delta + images.length) % images.length);
   };
 
   const show = (next: number) => {
     if (next === index) return;
     setLoaded(false);
+    setFailed(false);
     setIndex(next);
   };
 
@@ -537,6 +542,12 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
           <div className="absolute inset-0 animate-pulse bg-gradient-to-br from-brand-blush via-muted to-secondary" />
         )}
 
+        {failed && (
+          <div className="absolute inset-0 grid place-items-center bg-gradient-to-br from-brand-blush via-background to-secondary">
+            <Gem className="size-10 text-primary/40" strokeWidth={1.4} />
+          </div>
+        )}
+
         <AnimatePresence initial={false}>
           <motion.div
             key={index}
@@ -552,8 +563,14 @@ function ProductGallery({ product }: { product: Doc<"products"> }) {
               draggable={false}
               loading={index === 0 ? "eager" : "lazy"}
               decoding="async"
-              onLoad={() => setLoaded(true)}
-              onError={() => setLoaded(true)}
+              onLoad={() => {
+                setFailed(false);
+                setLoaded(true);
+              }}
+              onError={() => {
+                setFailed(true);
+                setLoaded(true);
+              }}
               style={{
                 transformOrigin: origin ? `${origin.x}% ${origin.y}%` : "center",
               }}

@@ -94,7 +94,7 @@ export function AdminOverview() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-3">
         {stats.map((stat, index) => (
           <motion.div
             key={stat.label}
@@ -111,7 +111,7 @@ export function AdminOverview() {
                 <stat.icon className="size-4" strokeWidth={1.8} />
               </span>
             </div>
-            <p className="mt-3 font-display text-2xl font-semibold tracking-tight">
+            <p className="mt-3 font-display text-xl font-semibold tracking-tight sm:text-2xl">
               {stat.value}
             </p>
             <p className="mt-1 text-[11px] text-muted-foreground">{stat.hint}</p>

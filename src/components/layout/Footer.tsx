@@ -31,7 +31,7 @@ export function Footer() {
           <div className="grid gap-10 lg:grid-cols-[1.4fr_1fr_1fr_1fr]">
             <div>
               <div className="flex items-center gap-2.5">
-                <img src={logoUrl} alt="" className="size-10 rounded-xl object-cover" />
+                <img src={logoUrl} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/auravelle-mark.svg"; }} className="size-10 rounded-xl object-cover" />
                 <span className="flex flex-col leading-none">
                   <span className="font-display text-base font-semibold tracking-tight">
                     {storeName}
