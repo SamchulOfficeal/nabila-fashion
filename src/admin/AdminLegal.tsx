@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/services/firebase/api";
+import { useShop } from "@/context/app-context";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
 import { AlignLeft, Bold, FileText, Heading2, List, Loader2, Save } from "lucide-react";
@@ -52,6 +53,7 @@ function renderContent(content: string) {
 }
 
 export function AdminLegal() {
+  const { storeName } = useShop();
   const [slug, setSlug] = useState(PAGES[0].slug);
   const page = useQuery(api.legal.get, { slug });
   const upsert = useMutation(api.legal.upsert);
@@ -195,7 +197,7 @@ export function AdminLegal() {
           </h2>
           <div className="glass-soft mt-4 max-h-[42rem] overflow-y-auto rounded-2xl p-5">
             <span className="text-[10px] font-semibold tracking-[0.24em] text-primary uppercase">
-              NABILA FASHION
+              {storeName}
             </span>
             <h3 className="mt-2 font-display text-2xl font-semibold tracking-tight">
               {title}

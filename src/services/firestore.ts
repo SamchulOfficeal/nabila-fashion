@@ -33,15 +33,15 @@ const withId = <T extends DocumentData>(snapshot: { id: string; data: () => T })
 const all = async (name: string) => (await getDocs(table(name))).docs.map(withId);
 
 const DEFAULT_SETTINGS: AnyRecord = {
-  storeName: "AURAVELLE",
-  logoUrl: "/auravelle-mark.svg",
+  storeName: "NABILA FASHION",
+  logoUrl: "/logo.svg",
   announcement: "Free delivery over ৳4,000",
   supportPhone: "+8801700000000",
   whatsappNumber: "+8801700000000",
   chatEnabled: true,
   chatGreeting: "Hello! How can we help you today?",
   chatApiKey: "",
-  chatSystemPrompt: "You are a helpful customer care assistant for AURAVELLE.",
+  chatSystemPrompt: "You are a helpful customer care assistant for NABILA FASHION.",
   freeDeliveryThreshold: 4000,
   usdRate: 120,
   currency: "BDT",
@@ -128,7 +128,9 @@ async function products(args: AnyRecord = {}): Promise<AnyRecord[]> {
     if (args.sort === "price-desc") return effectivePrice(b) - effectivePrice(a);
     if (args.sort === "rating") return (b.rating ?? 0) - (a.rating ?? 0);
     if (args.sort === "popular") return (b.soldCount ?? 0) - (a.soldCount ?? 0);
-    return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    // Issue 6: newest first. createdAt can be undefined on legacy docs, so
+    // fall back to Firestore's own _creationTime before defaulting to 0.
+    return (b.createdAt ?? b._creationTime ?? 0) - (a.createdAt ?? a._creationTime ?? 0);
   });
   return result.slice(0, args.limit ?? 60);
 }
@@ -147,6 +149,7 @@ async function validateCoupon(rawCode: string, subtotal: number) {
 
 async function placeOrder(args: AnyRecord) {
   const user = await requireProfile();
+  if (args.acceptedTerms !== true) throw new Error("Please accept the terms & conditions to place your order.");
   if (!divisionNames().includes(args.division)) throw new Error("Please choose a valid delivery division.");
   const phoneDigits = clean(args.phone).replace(/\D/g, "");
   const phone = phoneDigits.startsWith("88") && phoneDigits.length === 13 ? phoneDigits.slice(2) : phoneDigits;
@@ -155,6 +158,8 @@ async function placeOrder(args: AnyRecord) {
   const address = clean(args.address, 240).replace(/\s+/g, " ");
   if (district.length < 3 || !/[A-Za-z\u0980-\u09FF]/.test(district)) throw new Error("Please enter a valid district or city.");
   if (address.length < 10 || !/[A-Za-z\u0980-\u09FF]/.test(address)) throw new Error("Please enter a complete delivery address.");
+  const customerName = clean(args.customerName, 80).replace(/\s+/g, " ");
+  if (customerName.length < 3 || !customerName.includes(" ")) throw new Error("Please enter your full name (first and last name).");
 
   const cartSnapshot = (await getDocs(query(table("cartItems"), where("userId", "==", user._id)))).docs.map(withId);
   if (!cartSnapshot.length) throw new Error("Your bag is empty.");
@@ -166,6 +171,10 @@ async function placeOrder(args: AnyRecord) {
   }
 
   const applied = args.couponCode ? await validateCoupon(args.couponCode, cartSnapshot.reduce((sum, item) => sum + effectivePrice(productSnapshots.get(item.productId)!) * item.quantity, 0)) : null;
+  // Validate the bKash/Nagad reference server-side instead of trusting the client.
+  const paymentReference = args.paymentMethod === "bkash" || args.paymentMethod === "nagad"
+    ? (() => { const ref = clean(args.paymentReference, 60); if (!(/^[A-Za-z0-9]{6,20}$/.test(ref) || /^01[3-9]\d{8}$/.test(ref.replace(/\D/g, "")))) throw new Error(`Enter the ${args.paymentMethod === "bkash" ? "bKash" : "Nagad"} transaction ID or the mobile number you paid from.`); return ref; })()
+    : "";
   const createdAt = now();
   const result = await runTransaction(db, async (transaction) => {
     let subtotal = 0;
@@ -187,10 +196,10 @@ async function placeOrder(args: AnyRecord) {
     const total = Math.max(0, subtotal + deliveryCharge - discount);
     const orderRef = doc(collection(db, "orders"));
     const order = {
-      orderNumber: orderNumber(), userId: user._id, customerName: clean(args.customerName, 80), customerEmail: user.email ?? "", phone,
+      orderNumber: orderNumber(), userId: user._id, customerName, customerEmail: user.email ?? "", phone,
       division: args.division, district, address, note: args.note ? clean(args.note, 240) : "",
       items, subtotal, deliveryCharge, discount, total, couponCode: applied?.code ?? "", resellerCode: clean(args.resellerCode, 24).toUpperCase(),
-      paymentMethod: args.paymentMethod ?? "cod", paymentStatus: "unpaid", status: "pending", statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }], currency: "BDT", paymentReference: args.paymentReference ? clean(args.paymentReference, 60) : "", courierName: "", consignmentCode: "", createdAt,
+      paymentMethod: args.paymentMethod ?? "cod", paymentStatus: "unpaid", status: "pending", statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }], currency: "BDT", paymentReference, acceptedTerms: true, courierName: "", consignmentCode: "", createdAt,
     };
     transaction.set(orderRef, order);
     for (const item of cartSnapshot) {

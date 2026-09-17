@@ -7,7 +7,7 @@ import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { cn, discountPercent, timeRemaining } from "@/lib/utils";
 import { motion } from "framer-motion";
-import { Heart, ShoppingBag, Star, Timer } from "lucide-react";
+import { Heart, Loader2, ShoppingBag, Star, Timer } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
@@ -124,7 +124,7 @@ export function ProductCard({
   className?: string;
 }) {
   const { t } = useShop();
-  const { add } = useCart();
+  const { add, addingId } = useCart();
   const { isSaved, toggle } = useWishlist();
 
   const { price, compareAt, isFlash } = livePrice(product);
@@ -256,12 +256,18 @@ export function ProductCard({
             </span>
             <Button
               size="sm"
-              disabled={soldOut}
-              onClick={() => void add(product._id)}
+              disabled={soldOut || addingId === product._id}
+              onClick={() =>
+                void add(product._id, { priceHint: livePrice(product).price })
+              }
               className="h-9 shrink-0 cursor-pointer gap-1.5 rounded-full px-3.5 text-xs font-medium"
             >
-              <ShoppingBag className="size-3.5" strokeWidth={1.8} />
-              {t("product.addToBag")}
+              {addingId === product._id ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <ShoppingBag className="size-3.5" strokeWidth={1.8} />
+              )}
+              {addingId === product._id ? t("common.adding") : t("product.addToBag")}
             </Button>
           </div>
         </div>

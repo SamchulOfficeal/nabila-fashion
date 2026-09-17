@@ -53,7 +53,7 @@ const AdminSettings = lazy(() =>
 function RouteLoading() {
   return (
     <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading NABILA FASHION…</div>
+      <div className="animate-pulse text-muted-foreground">Loading…</div>
     </div>
   );
 }

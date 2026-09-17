@@ -2,7 +2,7 @@ import { api } from "@/services/firebase/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useAuth } from "@/hooks/use-auth";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
-import { useCallback } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 
@@ -15,6 +15,18 @@ export function useCart() {
   const clearMutation = useMutation(api.cart.clear);
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
+
+  // Optimistic overlay: bumps applied on click, cleared as soon as the server
+  // summary arrives so the UI never waits a full write + refetch round-trip.
+  const [pendingAdds, setPendingAdds] = useState<{ count: number; subtotal: number }>({
+    count: 0,
+    subtotal: 0,
+  });
+  const [addingId, setAddingId] = useState<Id<"products"> | null>(null);
+
+  useEffect(() => {
+    setPendingAdds({ count: 0, subtotal: 0 });
+  }, [summary?.count, summary?.subtotal]);
 
   const requireAuth = useCallback(
     (intent: string) => {
@@ -31,21 +43,34 @@ export function useCart() {
   const add = useCallback(
     async (
       productId: Id<"products">,
-      options?: { quantity?: number; size?: string; color?: string; silent?: boolean },
+      options?: { quantity?: number; size?: string; color?: string; silent?: boolean; priceHint?: number },
     ) => {
       if (!requireAuth("start your bag")) return false;
+      const quantity = options?.quantity ?? 1;
+      setAddingId(productId);
+      setPendingAdds((pending) => ({
+        count: pending.count + quantity,
+        subtotal: pending.subtotal + quantity * (options?.priceHint ?? 0),
+      }));
       try {
         await addMutation({
           productId,
-          quantity: options?.quantity ?? 1,
+          quantity,
           size: options?.size,
           color: options?.color,
         });
         if (!options?.silent) toast.success("Added to your bag");
         return true;
       } catch (error) {
+        // Roll back the optimistic bump when the server rejected the write.
+        setPendingAdds((pending) => ({
+          count: Math.max(0, pending.count - quantity),
+          subtotal: Math.max(0, pending.subtotal - quantity * (options?.priceHint ?? 0)),
+        }));
         toast.error(error instanceof Error ? error.message : "Could not add to bag");
         return false;
+      } finally {
+        setAddingId(null);
       }
     },
     [addMutation, requireAuth],
@@ -84,10 +109,11 @@ export function useCart() {
 
   return {
     items: items ?? [],
-    count: summary?.count ?? 0,
+    count: (summary?.count ?? 0) + pendingAdds.count,
     lineCount: summary?.lines ?? 0,
-    subtotal: summary?.subtotal ?? 0,
+    subtotal: (summary?.subtotal ?? 0) + pendingAdds.subtotal,
     isLoading: items === undefined || summary === undefined,
+    addingId,
     add,
     updateQuantity,
     remove,

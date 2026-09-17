@@ -6,6 +6,7 @@ import {
   InputOTPGroup,
   InputOTPSlot,
 } from "@/components/ui/input-otp";
+import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
 import { useUiStore } from "@/store/ui-store";
 import { motion } from "framer-motion";
@@ -36,6 +37,8 @@ function resolveRedirectAfterAuth(returnTo: string | null, fallback = "/account"
 }
 
 function Auth({ redirectAfterAuth }: AuthProps = {}) {
+  const { storeName } = useShop();
+  const brandInitial = storeName.charAt(0).toUpperCase();
   const {
     isLoading: authLoading,
     isAuthenticated,
@@ -145,7 +148,7 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
     <div className="mx-auto w-full max-w-6xl px-4 py-10 sm:px-6 lg:px-8">
       <Seo
         title="Sign in"
-        description="Sign in to NABILA FASHION with a secure email one-time passcode."
+        description={`Sign in to ${storeName} with a secure email one-time passcode.`}
       />
 
       <div className="grid items-stretch gap-6 lg:grid-cols-[1.05fr_1fr]">
@@ -160,14 +163,14 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
           <div className="relative flex h-full flex-col">
             <Link to="/" className="flex items-center gap-3">
               <span className="grid size-11 place-items-center rounded-2xl bg-primary font-display text-base font-bold text-primary-foreground">
-                N
+                {brandInitial}
               </span>
               <span className="flex flex-col leading-none">
                 <span className="font-display text-lg font-semibold tracking-tight">
-                  NABILA
+                  {storeName.replace(/\s*FASHION$/i, "")}
                 </span>
                 <span className="text-[9px] font-medium tracking-[0.34em] text-muted-foreground">
-                  FASHION
+                  {storeName.includes("FASHION") ? "FASHION" : "STUDIO"}
                 </span>
               </span>
             </Link>
@@ -213,10 +216,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             <>
               <Link to="/" className="mb-6 flex items-center gap-2.5 lg:hidden">
                 <span className="grid size-9 place-items-center rounded-xl bg-primary font-display text-sm font-bold text-primary-foreground">
-                  N
+                  {brandInitial}
                 </span>
                 <span className="font-display text-sm font-semibold tracking-tight">
-                  NABILA FASHION
+                  {storeName}
                 </span>
               </Link>
               <h1 className="font-display text-3xl font-semibold tracking-tight">
@@ -308,10 +311,10 @@ function Auth({ redirectAfterAuth }: AuthProps = {}) {
             <>
               <Link to="/" className="mb-6 flex items-center gap-2.5 lg:hidden">
                 <span className="grid size-9 place-items-center rounded-xl bg-primary font-display text-sm font-bold text-primary-foreground">
-                  N
+                  {brandInitial}
                 </span>
                 <span className="font-display text-sm font-semibold tracking-tight">
-                  NABILA FASHION
+                  {storeName}
                 </span>
               </Link>
               <h1 className="font-display text-3xl font-semibold tracking-tight">

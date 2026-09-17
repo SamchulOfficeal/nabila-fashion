@@ -48,7 +48,8 @@ const NAV = [
 ];
 
 export function AdminLayout() {
-  const { t } = useShop();
+  const { t, storeName } = useShop();
+  const brandInitial = storeName.charAt(0).toUpperCase();
   const profile = useQuery(api.profile.get);
   const notifications = useQuery(api.notifications.staffRecent, { limit: 8 });
   const unread = useQuery(api.notifications.unreadCount);
@@ -69,11 +70,11 @@ export function AdminLayout() {
         className="mb-4 flex items-center gap-2.5 rounded-2xl px-3 py-2 transition-colors hover:bg-accent"
       >
         <span className="grid size-9 place-items-center rounded-xl bg-primary font-display text-sm font-bold text-primary-foreground">
-          N
+          {brandInitial}
         </span>
         <span className="flex flex-col leading-none">
           <span className="font-display text-sm font-semibold tracking-tight">
-            NABILA
+            {storeName.replace(/\s*FASHION$/i, "")}
           </span>
           <span className="text-[9px] font-medium tracking-[0.3em] text-muted-foreground">
             CONTROL

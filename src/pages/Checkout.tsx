@@ -1,6 +1,7 @@
 import { Seo } from "@/components/Seo";
 import { SmartImage } from "@/components/SmartImage";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -59,6 +60,7 @@ export default function Checkout() {
   const [appliedCode, setAppliedCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [renderTime] = useState(() => Date.now());
   const prefilled = useRef(false);
@@ -75,8 +77,10 @@ export default function Checkout() {
    */
   const validateDetails = () => {
     const found: Record<string, string> = {};
-    if (form.name.trim().length < 2) {
-      found.name = "Please enter your full name.";
+    // Issue 9: require a plausible full name (two words minimum).
+    const name = form.name.trim().replace(/\s+/g, " ");
+    if (name.length < 3 || !name.includes(" ")) {
+      found.name = "Please enter your full name (first and last name).";
     }
     const digits = (form.phone ?? "").replace(/[^0-9]/g, "");
     const normalized =
@@ -184,6 +188,11 @@ export default function Checkout() {
       return;
     }
 
+    if (!acceptedTerms) {
+      toast.error("Please accept the terms & conditions to place your order.");
+      return;
+    }
+
     setBusy(true);
     try {
       const result = await placeOrder({
@@ -202,10 +211,13 @@ export default function Checkout() {
         resellerCode: form.resellerCode.trim() || undefined,
         paymentMethod: payment,
         paymentReference: payment !== "cod" ? paymentReference.trim() || undefined : undefined,
+        acceptedTerms,
       });
 
+      const methodLabel =
+        payment === "bkash" ? "bKash" : payment === "nagad" ? "Nagad" : "Cash on delivery";
       toast.success(`${t("checkout.success")} · ${result.orderNumber}`, {
-        description: `৳${result.total.toLocaleString()} payable on delivery.`,
+        description: `৳${result.total.toLocaleString()} · ${methodLabel}${payment === "cod" ? " payable on delivery." : "."}`,
       });
 
       // Outbound channels (customer confirmation email, staff webhook/email) —
@@ -217,6 +229,7 @@ export default function Checkout() {
         division: form.division,
         total: result.total,
         itemCount: count,
+        paymentMethod: payment,
         customerEmail: user?.email ?? undefined,
       }).catch(() => undefined);
 
@@ -628,6 +641,27 @@ export default function Checkout() {
                 {busy ? t("checkout.placing") : t("checkout.placeOrder")}
               </Button>
             </motion.div>
+
+            {/* Issue 8: explicit terms acceptance gate before placing the order. */}
+            <label className="mt-3 flex cursor-pointer items-start gap-2.5 text-[11px] leading-4 text-muted-foreground">
+              <Checkbox
+                checked={acceptedTerms}
+                onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                className="mt-0.5 cursor-pointer"
+                aria-label="Accept the terms and conditions"
+              />
+              <span>
+                I agree to the{" "}
+                <Link
+                  to="/legal/terms-conditions"
+                  target="_blank"
+                  className="font-medium text-primary underline-offset-2 hover:underline"
+                >
+                  terms &amp; conditions
+                </Link>{" "}
+                and confirm my order details are correct.
+              </span>
+            </label>
 
             <Button
               type="button"

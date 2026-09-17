@@ -53,19 +53,21 @@ function confirmationEmail(args: {
   total: number;
   itemCount: number;
   division: string;
+  paymentMethodLabel: string;
 }): EmailPayload {
   const siteUrl = process.env.SITE_URL;
   const track = siteUrl
     ? `<a href="${siteUrl}/orders" style="display:inline-block;margin-top:18px;background:#9d174d;color:#ffffff;text-decoration:none;padding:12px 26px;border-radius:999px;font-weight:600;font-size:14px;">Track my order</a>`
     : "";
 
+  const brand = process.env.SITE_BRAND ?? "NABILA FASHION";
   const html = `<!doctype html>
 <html>
   <body style="margin:0;padding:32px 16px;background:#faf7f5;font-family:Georgia,'Times New Roman',serif;color:#2b1722;">
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 12px 40px rgba(43,23,34,0.08);">
       <tr>
         <td style="background:#9d174d;padding:28px 32px;">
-          <p style="margin:0;color:#f8e8ee;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;">NABILA FASHION</p>
+          <p style="margin:0;color:#f8e8ee;font-size:11px;letter-spacing:0.28em;text-transform:uppercase;">${brand}</p>
           <h1 style="margin:8px 0 0;font-size:22px;font-weight:600;color:#ffffff;">Thank you, ${args.customerName}!</h1>
         </td>
       </tr>
@@ -77,7 +79,7 @@ function confirmationEmail(args: {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="font-size:14px;line-height:1.9;">
             <tr><td style="color:#8a7480;">Items</td><td align="right" style="font-weight:600;">${args.itemCount}</td></tr>
             <tr><td style="color:#8a7480;">Ship to</td><td align="right" style="font-weight:600;">${args.division}</td></tr>
-            <tr><td style="color:#8a7480;">Payment</td><td align="right" style="font-weight:600;">Cash on delivery</td></tr>
+            <tr><td style="color:#8a7480;">Payment</td><td align="right" style="font-weight:600;">${args.paymentMethodLabel}</td></tr>
             <tr>
               <td style="border-top:1px solid #f0e4ea;padding-top:10px;color:#8a7480;">Total payable</td>
               <td align="right" style="border-top:1px solid #f0e4ea;padding-top:10px;font-size:18px;font-weight:700;color:#9d174d;">৳${args.total.toLocaleString()}</td>
@@ -96,7 +98,7 @@ function confirmationEmail(args: {
 
   return {
     to: "",
-    subject: `Order confirmed · ${args.orderNumber} · NABILA FASHION`,
+    subject: `Order confirmed · ${args.orderNumber} · ${brand}`,
     html,
   };
 }
@@ -109,23 +111,32 @@ export const dispatchOrderAlert = action({
     division: v.string(),
     total: v.number(),
     itemCount: v.number(),
+    paymentMethod: v.string(),
     customerEmail: v.optional(v.string()),
   },
   handler: async (_ctx, args) => {
+    const methodLabel =
+      args.paymentMethod === "bkash"
+        ? "bKash"
+        : args.paymentMethod === "nagad"
+          ? "Nagad"
+          : args.paymentMethod === "online"
+            ? "Online payment"
+            : "Cash on delivery";
     const staffText = [
-      "🛍️ New NABILA FASHION order",
+      `🛍️ New ${process.env.SITE_BRAND ?? "NABILA FASHION"} order`,
       `Order: ${args.orderNumber}`,
       `Customer: ${args.customerName} (${args.phone})`,
       `Ship to: ${args.division}`,
       `Items: ${args.itemCount}`,
-      `Total: ৳${args.total.toLocaleString()} · Cash on delivery`,
+      `Total: ৳${args.total.toLocaleString()} · ${methodLabel}`,
     ].join("\n");
 
     const result = { customerEmail: false, webhook: false, staffEmail: false };
 
     // 1) Customer order confirmation.
     if (args.customerEmail && args.customerEmail.includes("@")) {
-      const email = confirmationEmail(args);
+      const email = confirmationEmail({ ...args, paymentMethodLabel: methodLabel });
       try {
         result.customerEmail = await sendEmail({ ...email, to: args.customerEmail });
       } catch (error) {

@@ -81,7 +81,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       toggleTheme,
       t: (key: TranslationKey) => translate(locale, key),
       money: (amountBdt: number) => formatMoney(amountBdt, currency, usdRate),
-      storeName: config?.storeName ?? "AURAVELLE",
+      storeName: config?.storeName ?? "NABILA FASHION",
       logoUrl: config?.logoUrl ?? "/auravelle-mark.svg",
       announcement: config?.announcement ?? "",
       supportPhone: config?.supportPhone ?? "+8801700000000",

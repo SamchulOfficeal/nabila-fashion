@@ -35,9 +35,9 @@ const en = {
   "section.flashHint": "Studio prices for a few more hours",
   "section.newIn": "New arrivals",
   "section.newInHint": "Freshly cut and ready to ship",
-  "section.promise": "The NABILA promise",
+  "section.promise": "Our promise",
   "section.reviews": "Loved by our customers",
-  "section.newsletter": "Join the NABILA list",
+  "section.newsletter": "Join the insider list",
   "section.newsletterHint": "Early access to drops, private sales and styling notes.",
 
   "product.addToBag": "Add to bag",
@@ -123,7 +123,7 @@ const en = {
   "account.resellerHint": "Share your code — you earn on every delivered order.",
   "account.adminHint": "You have store management access.",
 
-  "auth.title": "Welcome to NABILA",
+  "auth.title": "Welcome",
   "auth.subtitle": "Sign in with your email to shop, save favourites and track every order.",
 
   "footer.rights": "All rights reserved.",
@@ -143,6 +143,7 @@ const en = {
   "common.clear": "Clear all",
   "common.results": "pieces",
   "common.free": "Free",
+  "common.adding": "Adding…",
   "common.off": "OFF",
   "common.new": "New",
 } as const;
@@ -184,9 +185,9 @@ const bn: Record<TranslationKey, string> = {
   "section.flashHint": "কয়েক ঘণ্টার জন্য বিশেষ দাম",
   "section.newIn": "নতুন কালেকশন",
   "section.newInHint": "সদ্য তৈরি, ডেলিভারির জন্য প্রস্তুত",
-  "section.promise": "নাবিলার প্রতিশ্রুতি",
+  "section.promise": "আমাদের প্রতিশ্রুতি",
   "section.reviews": "ক্রেতাদের মতামত",
-  "section.newsletter": "নাবিলা লিস্টে যোগ দিন",
+  "section.newsletter": "ইনসাইডার লিস্টে যোগ দিন",
   "section.newsletterHint": "নতুন কালেকশন, প্রাইভেট সেল ও স্টাইলিং টিপস সবার আগে।",
 
   "product.addToBag": "ব্যাগে যোগ করুন",
@@ -272,7 +273,7 @@ const bn: Record<TranslationKey, string> = {
   "account.resellerHint": "আপনার কোড শেয়ার করুন — প্রতিটি ডেলিভারি অর্ডারে কমিশন পাবেন।",
   "account.adminHint": "আপনার স্টোর ম্যানেজমেন্ট অ্যাক্সেস আছে।",
 
-  "auth.title": "নাবিলায় স্বাগতম",
+  "auth.title": "স্বাগতম",
   "auth.subtitle": "ইমেইল দিয়ে লগ ইন করে কেনাকাটা করুন, পছন্দের পণ্য সেভ করুন ও অর্ডার ট্র্যাক করুন।",
 
   "footer.rights": "সর্বস্বত্ব সংরক্ষিত।",
@@ -292,6 +293,7 @@ const bn: Record<TranslationKey, string> = {
   "common.clear": "সব মুছুন",
   "common.results": "পণ্য",
   "common.free": "ফ্রি",
+  "common.adding": "যোগ হচ্ছে…",
   "common.off": "ছাড়",
   "common.new": "নতুন",
 };

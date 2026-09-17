@@ -57,6 +57,8 @@ export default defineConfig({
           'framer-motion': ['framer-motion'],
           'charts': ['recharts'],
           'forms': ['react-hook-form', '@hookform/resolvers', 'zod'],
+          // Firebase SDK (~500kB) lives in the entry without this split
+          'firebase': ['firebase/app', 'firebase/auth', 'firebase/firestore', 'firebase/storage'],
         },
         // Optimize chunk size
         chunkFileNames: 'assets/[name]-[hash].js',

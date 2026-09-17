@@ -42,6 +42,7 @@ const COLOR_OPTIONS = [
 ];
 
 export default function Shop() {
+  const { storeName } = useShop();
   const { t, locale } = useShop();
   const [params, setParams] = useSearchParams();
 
@@ -288,7 +289,7 @@ export default function Shop() {
         }
         description={
           activeCategory?.tagline ??
-          "Browse the full NABILA FASHION collection: sarees, three piece sets, abayas, gowns, bags and jewellery."
+          `Browse the full ${storeName} collection: sarees, three piece sets, abayas, gowns, bags and jewellery.`
         }
       />
 

@@ -32,10 +32,11 @@ const FIELDS = [
   { key: "paymentNagadNumber", label: "Nagad merchant/personal number" },
   { key: "courierPathaoPhone", label: "Pathao account phone" },
   { key: "courierSteadfastPhone", label: "Steadfast account phone" },
+  { key: "commissionDefault", label: "Default reseller commission (৳ per unit)", type: "number" },
 ] as const;
 
 export function AdminSettings() {
-  const { money } = useShop();
+  const { money, storeName } = useShop();
   const settings = useQuery(api.settings.raw);
   const update = useMutation(api.settings.update);
   const [values, setValues] = useState<Record<string, string>>({});
@@ -72,7 +73,7 @@ export function AdminSettings() {
             value: values[field.key] ?? "",
           })),
           { key: "announcement", value: announcement },
-          { key: "chatSystemPrompt", value: values.chatSystemPrompt ?? "You are a helpful customer care assistant for AURAVELLE." },
+          { key: "chatSystemPrompt", value: values.chatSystemPrompt ?? `You are a helpful customer care assistant for ${storeName}.` },
           { key: "chatEnabled", value: chatEnabled ? "true" : "false" },
           { key: "paymentBkashEnabled", value: bkashEnabled ? "true" : "false" },
           { key: "paymentNagadEnabled", value: nagadEnabled ? "true" : "false" },

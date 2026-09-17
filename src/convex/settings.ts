@@ -5,6 +5,7 @@ import { DEFAULT_USD_RATE, FREE_DELIVERY_THRESHOLD } from "./lib/delivery";
 
 export const DEFAULTS = {
   storeName: "NABILA FASHION",
+  logoUrl: "/logo.svg",
   usdRate: String(DEFAULT_USD_RATE),
   freeDeliveryThreshold: String(FREE_DELIVERY_THRESHOLD),
   supportPhone: "+8801700000000",
@@ -12,6 +13,18 @@ export const DEFAULTS = {
   announcement:
     "Free delivery on orders over ৳4,000 · Cash on delivery available across Bangladesh",
   webhookEnabled: "false",
+  // Issue 10: the eleven settings the admin panel writes but DEFAULTS was
+  // missing — without these, `raw` and `publicConfig` silently dropped them.
+  chatEnabled: "true",
+  chatGreeting: "Hello! How can we help you today?",
+  chatApiKey: "",
+  chatSystemPrompt: "You are a helpful customer care assistant for NABILA FASHION.",
+  paymentBkashEnabled: "false",
+  paymentBkashNumber: "",
+  paymentNagadEnabled: "false",
+  paymentNagadNumber: "",
+  courierPathaoPhone: "",
+  courierSteadfastPhone: "",
 };
 
 export const publicConfig = query({
@@ -22,11 +35,18 @@ export const publicConfig = query({
     const read = (key: keyof typeof DEFAULTS) => map.get(key) ?? DEFAULTS[key];
     return {
       storeName: read("storeName"),
+      logoUrl: read("logoUrl"),
       usdRate: Number(read("usdRate")) || DEFAULT_USD_RATE,
       freeDeliveryThreshold: Number(read("freeDeliveryThreshold")) || FREE_DELIVERY_THRESHOLD,
       supportPhone: read("supportPhone"),
       whatsappNumber: read("whatsappNumber"),
       announcement: read("announcement"),
+      chatEnabled: read("chatEnabled") !== "false",
+      chatGreeting: read("chatGreeting"),
+      paymentBkashEnabled: read("paymentBkashEnabled") === "true",
+      paymentBkashNumber: read("paymentBkashNumber"),
+      paymentNagadEnabled: read("paymentNagadEnabled") === "true",
+      paymentNagadNumber: read("paymentNagadNumber"),
     };
   },
 });
