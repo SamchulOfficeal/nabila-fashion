@@ -78,7 +78,7 @@ export default function Checkout() {
     if (form.name.trim().length < 2) {
       found.name = "Please enter your full name.";
     }
-    const digits = form.phone.replace(/[^0-9]/g, "");
+    const digits = (form.phone ?? "").replace(/[^0-9]/g, "");
     const normalized =
       digits.startsWith("88") && digits.length === 13 ? digits.slice(2) : digits;
     if (!/^01[3-9]\d{8}$/.test(normalized)) {
@@ -87,11 +87,11 @@ export default function Checkout() {
     if (!form.division) {
       found.division = "Choose the division you want delivery in.";
     }
-    const district = form.district.trim().replace(/\s+/g, " ");
+    const district = (form.district ?? "").trim().replace(/\s+/g, " ");
     if (district.length < 3 || !/[A-Za-z\u0980-\u09FF]/.test(district)) {
       found.district = "Enter a valid district or city name.";
     }
-    const address = form.address.trim().replace(/\s+/g, " ");
+    const address = (form.address ?? "").trim().replace(/\s+/g, " ");
     if (address.length < 10 || !/[A-Za-z\u0980-\u09FF]/.test(address)) {
       found.address = "Enter a complete address with house, road or area details.";
     }
@@ -124,12 +124,12 @@ export default function Checkout() {
     }
     setForm((current) => ({
       ...current,
-      name: current.name || profile.name,
-      phone: current.phone || profile.phone,
+      name: current.name || profile.name || "",
+      phone: current.phone || profile.phone || "",
       division: current.division || profile.division || detected,
-      district: current.district || profile.district,
-      address: current.address || profile.address,
-      resellerCode: current.resellerCode || profile.referralCode,
+      district: current.district || profile.district || "",
+      address: current.address || profile.address || "",
+      resellerCode: current.resellerCode || profile.referralCode || "",
     }));
   }, [profile]);
 
@@ -189,14 +189,14 @@ export default function Checkout() {
       const result = await placeOrder({
         customerName: form.name.trim(),
         phone: (() => {
-          const digits = form.phone.replace(/[^0-9]/g, "");
+          const digits = (form.phone ?? "").replace(/[^0-9]/g, "");
           return digits.startsWith("88") && digits.length === 13
             ? digits.slice(2)
             : digits;
         })(),
         division: form.division,
-        district: form.district.trim().replace(/\s+/g, " "),
-        address: form.address.trim().replace(/\s+/g, " "),
+        district: (form.district ?? "").trim().replace(/\s+/g, " "),
+        address: (form.address ?? "").trim().replace(/\s+/g, " "),
         note: form.note.trim() || undefined,
         couponCode: coupon?.ok ? appliedCode : undefined,
         resellerCode: form.resellerCode.trim() || undefined,
