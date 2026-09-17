@@ -132,13 +132,13 @@ export function AdminSettings() {
             ))}
           </div>
 
-          <div className="flex items-center gap-3 rounded-2xl bg-muted/50 p-3">
-            <img src={values.logoUrl || "/auravelle-mark.svg"} alt="Store logo preview" className="size-12 rounded-xl object-cover" />
+          <div className="flex flex-wrap items-center gap-3 rounded-2xl bg-muted/50 p-3">
+            <img src={values.logoUrl || "/auravelle-mark.svg"} alt="Store logo preview" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = "/auravelle-mark.svg"; }} className="size-12 rounded-xl object-cover" />
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold">Brand logo</p>
               <p className="truncate text-[11px] text-muted-foreground">Upload a square JPG, PNG, or SVG.</p>
             </div>
-            <Input type="file" accept="image/*" disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onLogoUpload(file); event.target.value = ""; }} className="max-w-44 cursor-pointer text-xs" />
+            <Input type="file" accept="image/*" disabled={logoUploading} onChange={(event) => { const file = event.target.files?.[0]; if (file) void onLogoUpload(file); event.target.value = ""; }} className="max-w-44 max-sm:w-full cursor-pointer text-xs" />
           </div>
 
           <div className="space-y-1.5">

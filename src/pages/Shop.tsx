@@ -465,7 +465,7 @@ export default function Shop() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-4 xl:grid-cols-3">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
                   <AnimatePresence initial={false}>
                     {results.slice(0, visible).map((product, index) => (
                       <ProductCard
