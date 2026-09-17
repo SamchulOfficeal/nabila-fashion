@@ -3,6 +3,7 @@ import { Seo } from "@/components/Seo";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   Sheet,
@@ -16,7 +17,7 @@ import { useShop } from "@/context/app-context";
 import { cn } from "@/lib/utils";
 import { useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
-import { Loader2, SearchX, SlidersHorizontal, X } from "lucide-react";
+import { SearchX, SlidersHorizontal, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
 
@@ -440,8 +441,16 @@ export default function Shop() {
 
           <div className="mt-6">
             {results === undefined ? (
-              <div className="grid place-items-center py-24">
-                <Loader2 className="size-5 animate-spin text-muted-foreground" />
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <div key={index} className="glass rounded-3xl p-2.5">
+                    <Skeleton className="aspect-[4/5] w-full rounded-2xl" />
+                    <div className="space-y-2 p-2.5">
+                      <Skeleton className="h-3.5 w-3/4 rounded-full" />
+                      <Skeleton className="h-3 w-1/3 rounded-full" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : results.length === 0 ? (
               <div className="glass grid place-items-center gap-4 rounded-3xl px-6 py-20 text-center">

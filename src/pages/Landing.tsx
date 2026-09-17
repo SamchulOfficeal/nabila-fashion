@@ -2,6 +2,7 @@ import { FlashCountdown, livePrice, ProductCard } from "@/components/ProductCard
 import { Seo } from "@/components/Seo";
 import { SmartImage } from "@/components/SmartImage";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/services/firebase/api";
 import { useShop } from "@/context/app-context";
 import { cn, discountPercent } from "@/lib/utils";
@@ -280,7 +281,14 @@ export default function Landing() {
           }
         />
         <div className="mt-7 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {(categories ?? []).map((category, index) => (
+          {categories === undefined
+            ? Array.from({ length: 6 }).map((_, index) => (
+                <div key={index} className="glass rounded-3xl p-2.5">
+                  <Skeleton className="aspect-square w-full rounded-2xl" />
+                  <Skeleton className="mt-2.5 h-3 w-2/3 rounded-full" />
+                </div>
+              ))
+            : (categories ?? []).map((category, index) => (
             <motion.div
               key={category._id}
               initial={{ opacity: 0, y: 18 }}
@@ -308,7 +316,7 @@ export default function Landing() {
                 </div>
               </Link>
             </motion.div>
-          ))}
+            ))}
         </div>
       </section>
 

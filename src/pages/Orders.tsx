@@ -5,12 +5,14 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/services/firebase/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useShop } from "@/context/app-context";
+import { printInvoice } from "@/lib/invoice";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Loader2, Package, Truck } from "lucide-react";
+import { ChevronDown, FileText, Loader2, Package, Truck } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
+import { toast } from "sonner";
 
 const STATUS_FLOW = ["pending", "confirmed", "processing", "shipped", "delivered"] as const;
 
@@ -90,10 +92,18 @@ function OrderCard({
   open: boolean;
   onToggle: () => void;
 }) {
-  const { t, money } = useShop();
+  const { t, money, storeName, logoUrl, supportPhone } = useShop();
   const currentIndex = STATUS_FLOW.indexOf(
     order.status as (typeof STATUS_FLOW)[number],
   );
+
+  const downloadInvoice = () => {
+    try {
+      printInvoice(order, { storeName, logoUrl, supportPhone });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not open the invoice");
+    }
+  };
 
   return (
     <motion.div
@@ -208,9 +218,29 @@ function OrderCard({
                     </p>
                   )}
                   <p className="mt-3 text-[11px] font-medium text-primary">
-                    {order.paymentMethod === "cod" ? t("checkout.cod") : t("checkout.online")} ·{" "}
+                    {order.paymentMethod === "cod"
+                      ? t("checkout.cod")
+                      : order.paymentMethod === "bkash"
+                        ? "bKash"
+                        : order.paymentMethod === "nagad"
+                          ? "Nagad"
+                          : t("checkout.online")} ·{" "}
                     {order.paymentStatus}
                   </p>
+                  {order.consignmentCode && (
+                    <p className="mt-2 text-[11px] text-muted-foreground">
+                      Consignment: <strong className="text-foreground">{order.consignmentCode}</strong> · {order.courierName}
+                    </p>
+                  )}
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={downloadInvoice}
+                    className="mt-3 w-full cursor-pointer rounded-full text-xs"
+                  >
+                    <FileText className="size-3.5" strokeWidth={1.8} />
+                    Invoice / receipt
+                  </Button>
                 </div>
 
                 <div className="glass-soft rounded-2xl p-4">

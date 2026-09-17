@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /account
+Disallow: /orders
+Disallow: /checkout
+Disallow: /wishlist
+
+Sitemap: https://nabilafashion.com/sitemap.xml

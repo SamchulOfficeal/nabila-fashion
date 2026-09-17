@@ -3,6 +3,7 @@ import { SmartImage } from "@/components/SmartImage";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { api } from "@/services/firebase/api";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useShop } from "@/context/app-context";
@@ -43,6 +44,25 @@ export function AdminOrders() {
     search: search || undefined,
   });
   const updateStatus = useMutation(api.orders.updateStatus);
+  const setCourierInfo = useMutation(api.orders.setCourierInfo);
+  const [consignmentDraft, setConsignmentDraft] = useState<Record<string, string>>({});
+  const [savingConsignment, setSavingConsignment] = useState<string | null>(null);
+
+  const saveConsignment = async (orderId: Doc<"orders">["_id"]) => {
+    setSavingConsignment(orderId);
+    try {
+      await setCourierInfo({
+        orderId,
+        courierName: "Pathao/Steadfast",
+        consignmentCode: (consignmentDraft[orderId] ?? "").trim() || undefined,
+      });
+      toast.success("Courier details saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save courier details");
+    } finally {
+      setSavingConsignment(null);
+    }
+  };
 
   const onUpdate = async (
     orderId: Doc<"orders">["_id"],
@@ -294,6 +314,48 @@ export function AdminOrders() {
                             >
                               Mark payment received
                             </Button>
+                          </div>
+                          {order.paymentReference && (
+                            <p className="mt-2 text-[11px] text-muted-foreground">\n                              {order.paymentMethod === "bkash" ? "bKash" : "Nagad"} ref:{" "}
+                              <strong className="text-foreground">{order.paymentReference}</strong>
+                            </p>
+                          )}
+                          <div className="mt-3 space-y-1.5">
+                            <Label htmlFor={`consignment-${order._id}`} className="text-[11px] font-medium text-muted-foreground">
+                              Courier consignment / tracking ID
+                            </Label>
+                            <div className="flex gap-2">
+                              <Input
+                                id={`consignment-${order._id}`}
+                                value={consignmentDraft[order._id] ?? order.consignmentCode ?? ""}
+                                onChange={(event) =>
+                                  setConsignmentDraft((current) => ({
+                                    ...current,
+                                    [order._id]: event.target.value,
+                                  }))
+                                }
+                                placeholder="e.g. STF-8842193"
+                                maxLength={40}
+                                className="h-9 rounded-xl text-xs"
+                              />
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={
+                                  savingConsignment === order._id ||
+                                  (consignmentDraft[order._id] ?? order.consignmentCode ?? "") ===
+                                    (order.consignmentCode ?? "")
+                                }
+                                onClick={() => void saveConsignment(order._id)}
+                                className="shrink-0 cursor-pointer rounded-full text-xs"
+                              >
+                                {savingConsignment === order._id ? (
+                                  <Loader2 className="size-3.5 animate-spin" />
+                                ) : (
+                                  "Save"
+                                )}
+                              </Button>
+                            </div>
                           </div>
                         </div>
 

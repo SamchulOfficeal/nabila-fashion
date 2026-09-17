@@ -45,6 +45,19 @@ const DEFAULT_SETTINGS: AnyRecord = {
   freeDeliveryThreshold: 4000,
   usdRate: 120,
   currency: "BDT",
+  // Mobile-financial-service rails. Gateways are added when merchant keys exist;
+  // COD is always available. Structure ready for bKash/Nagad merchants.
+  paymentBkashEnabled: false,
+  paymentBkashNumber: "",
+  paymentBkashType: "merchant",
+  paymentNagadEnabled: false,
+  paymentNagadNumber: "",
+  // Courier integrations (Pathao/Steadfast). Parcel is dispatched over the
+  // phone network today; consignment numbers attach to orders when keys exist.
+  courierPathaoEnabled: false,
+  courierPathaoPhone: "",
+  courierSteadfastEnabled: false,
+  courierSteadfastPhone: "",
 };
 
 async function ensureProfile(): Promise<AnyRecord | null> {
@@ -177,7 +190,7 @@ async function placeOrder(args: AnyRecord) {
       orderNumber: orderNumber(), userId: user._id, customerName: clean(args.customerName, 80), customerEmail: user.email ?? "", phone,
       division: args.division, district, address, note: args.note ? clean(args.note, 240) : "",
       items, subtotal, deliveryCharge, discount, total, couponCode: applied?.code ?? "", resellerCode: clean(args.resellerCode, 24).toUpperCase(),
-      paymentMethod: args.paymentMethod ?? "cod", paymentStatus: "unpaid", status: "pending", statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }], currency: "BDT", createdAt,
+      paymentMethod: args.paymentMethod ?? "cod", paymentStatus: "unpaid", status: "pending", statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }], currency: "BDT", paymentReference: args.paymentReference ? clean(args.paymentReference, 60) : "", courierName: "", consignmentCode: "", createdAt,
     };
     transaction.set(orderRef, order);
     for (const item of cartSnapshot) {
@@ -231,7 +244,7 @@ async function overview() {
 export async function runQuery(path: FirebaseApiPath, args: AnyRecord = {}) {
   const [module, operation] = path.split(".");
   switch (`${module}.${operation}`) {
-    case "settings.publicConfig": { const rows = await all("settings"); const values = { ...DEFAULT_SETTINGS, ...Object.fromEntries(rows.map((row) => [row.key, row.value])) }; return { storeName: values.storeName, logoUrl: values.logoUrl, announcement: values.announcement, supportPhone: values.supportPhone, whatsappNumber: values.whatsappNumber, chatEnabled: values.chatEnabled, chatGreeting: values.chatGreeting, usdRate: Number(values.usdRate) || 120, freeDeliveryThreshold: Number(values.freeDeliveryThreshold) || 4000 }; }
+    case "settings.publicConfig": { const rows = await all("settings"); const values = { ...DEFAULT_SETTINGS, ...Object.fromEntries(rows.map((row) => [row.key, row.value])) }; return { storeName: values.storeName, logoUrl: values.logoUrl, announcement: values.announcement, supportPhone: values.supportPhone, whatsappNumber: values.whatsappNumber, chatEnabled: values.chatEnabled !== false && values.chatEnabled !== "false", chatGreeting: values.chatGreeting, usdRate: Number(values.usdRate) || 120, freeDeliveryThreshold: Number(values.freeDeliveryThreshold) || 4000, paymentBkashEnabled: values.paymentBkashEnabled === true || values.paymentBkashEnabled === "true", paymentBkashNumber: values.paymentBkashNumber ?? "", paymentNagadEnabled: values.paymentNagadEnabled === true || values.paymentNagadEnabled === "true", paymentNagadNumber: values.paymentNagadNumber ?? "" }; }
     case "settings.raw": { const rows = await all("settings"); return { ...DEFAULT_SETTINGS, ...Object.fromEntries(rows.map((row) => [row.key, row.value])) }; }
     case "catalog.list": return await products(args);
     case "catalog.featured": return await products({ ...args, featuredOnly: true });
@@ -271,7 +284,7 @@ export async function runQuery(path: FirebaseApiPath, args: AnyRecord = {}) {
 export async function runMutation(path: FirebaseApiPath, args: AnyRecord = {}) {
   const [module, operation] = path.split(".");
   switch (`${module}.${operation}`) {
-    case "profile.save": { const profile = await requireProfile(); await updateDoc(document("users", profile._id), Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined))); return; }
+    case "profile.save": { const profile = await requireProfile(); const ALLOWED_FIELDS = ["name", "phone", "division", "district", "address", "image"]; const patch = Object.fromEntries(Object.entries(args).filter(([key, value]) => ALLOWED_FIELDS.includes(key) && value !== undefined)); await updateDoc(document("users", profile._id), patch); return; }
     case "cart.add": { const profile = await requireProfile(); const product = await runQuery("catalog.byId", { id: args.productId }); if (!product?.isActive || product.stock <= 0) throw new Error("This piece is no longer available."); const rows = (await all("cartItems")).filter((item) => item.userId === profile._id && item.productId === args.productId && (item.size ?? "") === (args.size ?? product.sizes?.[0] ?? "") && (item.color ?? "") === (args.color ?? product.colors?.[0] ?? "")); const size = args.size ?? product.sizes?.[0]; const color = args.color ?? product.colors?.[0]; if (rows[0]) await updateDoc(document("cartItems", rows[0]._id), { quantity: Math.min(product.stock, 10, rows[0].quantity + (args.quantity ?? 1)) }); else { const row = await addDoc(table("cartItems"), { userId: profile._id, productId: args.productId, quantity: Math.min(product.stock, 10, Math.max(1, args.quantity ?? 1)), size, color, addedAt: now() }); return row.id; } return rows[0]?._id; }
     case "cart.updateQuantity": { const profile = await requireProfile(); const item = await getDoc(document("cartItems", args.itemId)); if (!item.exists() || item.data().userId !== profile._id) throw new Error("Item not found in your bag."); if (args.quantity <= 0) return deleteDoc(item.ref); const product = await runQuery("catalog.byId", { id: item.data().productId }); return updateDoc(item.ref, { quantity: Math.max(1, Math.min(10, Math.min(args.quantity, product?.stock ?? 10))) }); }
     case "cart.remove": { const profile = await requireProfile(); const item = await getDoc(document("cartItems", args.itemId)); if (!item.exists() || item.data().userId !== profile._id) throw new Error("Item not found in your bag."); return deleteDoc(item.ref); }
@@ -279,6 +292,7 @@ export async function runMutation(path: FirebaseApiPath, args: AnyRecord = {}) {
     case "wishlist.toggle": { const profile = await requireProfile(); const rows = (await all("wishlistItems")).filter((item) => item.userId === profile._id && item.productId === args.productId); if (rows[0]) { await deleteDoc(document("wishlistItems", rows[0]._id)); return false; } await addDoc(table("wishlistItems"), { userId: profile._id, productId: args.productId, addedAt: now() }); return true; }
     case "wishlist.remove": { const profile = await requireProfile(); const item = await getDoc(document("wishlistItems", args.itemId)); if (!item.exists() || item.data().userId !== profile._id) throw new Error("Item not found."); return deleteDoc(item.ref); }
     case "orders.placeOrder": return placeOrder(args);
+    case "orders.setCourierInfo": { await requireProfile(["admin", "manager"]); const courierOrderRef = document("orders", args.orderId); const patch: AnyRecord = {}; if (args.courierName !== undefined) patch.courierName = clean(args.courierName, 60); if (args.consignmentCode !== undefined) patch.consignmentCode = clean(args.consignmentCode, 40); if (!Object.keys(patch).length) return; return updateDoc(courierOrderRef, patch); }
     case "orders.updateStatus": { const staff = await requireProfile(["admin", "manager"]); const orderRef = document("orders", args.orderId); const result = await runTransaction(db, async (transaction) => { const snapshot = await transaction.get(orderRef); if (!snapshot.exists()) throw new Error("Order not found."); const order = withId(snapshot); const history = [...(order.statusHistory ?? []), { status: args.status, at: now(), note: args.note ? clean(args.note, 160) : undefined }]; if (args.status === "cancelled" && order.status !== "cancelled") for (const item of order.items ?? []) { const productRef = document("products", item.productId); const productSnapshot = await transaction.get(productRef); if (productSnapshot.exists()) { const product = productSnapshot.data(); transaction.update(productRef, { stock: (product.stock ?? 0) + item.quantity, soldCount: Math.max(0, (product.soldCount ?? 0) - item.quantity) }); } } transaction.update(orderRef, { status: args.status, statusHistory: history, paymentStatus: args.paymentStatus ?? (args.status === "delivered" && order.paymentMethod === "cod" ? "paid" : order.paymentStatus) }); transaction.set(doc(collection(db, "notifications")), { type: "order", title: `${order.orderNumber} → ${args.status}`, message: `${staff.name ?? "Staff"} updated the order status`, orderId: args.orderId, isRead: false, createdAt: now() }); return true; }); return result; }
     case "admin.setRole": { const admin = await requireProfile(["admin"]); const target = await getDoc(document("users", args.userId)); if (!target.exists()) throw new Error("User not found."); if (args.userId === admin._id && args.role !== "admin") throw new Error("You cannot remove your own administrator access."); const data = target.data(); const role = args.role; const patch: AnyRecord = { role }; if (role === "reseller" && !data.referralCode) patch.referralCode = `${clean(data.name || "NABI", 4).replace(/[^A-Za-z]/g, "").toUpperCase() || "NABI"}${Math.random().toString(36).slice(2, 6).toUpperCase()}`; return updateDoc(target.ref, patch); }
     case "admin.setBlocked": { const admin = await requireProfile(["admin"]); if (args.userId === admin._id) throw new Error("You cannot suspend your own account."); return updateDoc(document("users", args.userId), { blocked: args.blocked }); }
@@ -289,7 +303,7 @@ export async function runMutation(path: FirebaseApiPath, args: AnyRecord = {}) {
     case "catalog.createCategory": { await requireProfile(["admin", "manager"]); return (await addDoc(table("categories"), { ...args, name: clean(args.name, 60), slug: clean(args.name).toLowerCase().replace(/[^a-z0-9]+/g, "-"), order: args.order ?? (await all("categories")).length, isActive: true })).id; }
     case "catalog.updateCategory": await requireProfile(["admin", "manager"]); return updateDoc(document("categories", args.id), { ...args, id: undefined });
     case "catalog.removeCategory": await requireProfile(["admin", "manager"]); return deleteDoc(document("categories", args.id));
-    case "coupons.create": { await requireProfile(["admin", "manager"]); return (await addDoc(table("coupons"), { ...args, code: clean(args.code, 24).toUpperCase(), isActive: true, usedCount: 0, createdAt: now() })).id; }
+    case "coupons.create": { await requireProfile(["admin", "manager"]); const cValue = Math.max(0, Math.round(Number(args.value) || 0)); const cType = args.type === "percent" ? "percent" : "fixed"; if (cType === "percent" && cValue > 90) throw new Error("Percentage discounts are capped at 90%."); const cMin = Math.max(0, Math.round(Number(args.minSpend) || 0)); return (await addDoc(table("coupons"), { ...args, value: cValue, type: cType, minSpend: cMin, code: clean(args.code, 24).replace(/[^A-Z0-9]/gi, "").toUpperCase(), isActive: true, usedCount: 0, createdAt: now() })).id; }
     case "coupons.setActive": await requireProfile(["admin", "manager"]); return updateDoc(document("coupons", args.id), { isActive: args.isActive });
     case "coupons.remove": await requireProfile(["admin", "manager"]); return deleteDoc(document("coupons", args.id));
     case "banners.upsert": { await requireProfile(["admin", "manager"]); const id = args.id ?? null; const payload: AnyRecord = { ...args, updatedAt: now() }; delete payload.id; if (id) return setDoc(document("banners", id), payload, { merge: true }); return (await addDoc(table("banners"), payload)).id; }

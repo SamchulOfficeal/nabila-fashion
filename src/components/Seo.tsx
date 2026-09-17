@@ -17,6 +17,16 @@ function upsertMeta(selector: string, attr: "name" | "property", key: string, co
   tag.setAttribute("content", content);
 }
 
+function upsertCanonical(href: string) {
+  let tag = document.head.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+  if (!tag) {
+    tag = document.createElement("link");
+    tag.setAttribute("rel", "canonical");
+    document.head.appendChild(tag);
+  }
+  tag.setAttribute("href", href);
+}
+
 /** Per-route SEO metadata. Metadata is applied through a small effect to avoid extra deps. */
 export function Seo({ title, description, image, type = "website" }: SeoProps) {
   useEffect(() => {
@@ -25,6 +35,7 @@ export function Seo({ title, description, image, type = "website" }: SeoProps) {
     upsertMeta('meta[property="og:title"]', "property", "og:title", fullTitle);
     upsertMeta('meta[property="og:type"]', "property", "og:type", type);
     upsertMeta('meta[property="og:site_name"]', "property", "og:site_name", "NABILA FASHION");
+    upsertCanonical(window.location.origin + window.location.pathname);
 
     if (description) {
       upsertMeta('meta[name="description"]', "name", "description", description);
