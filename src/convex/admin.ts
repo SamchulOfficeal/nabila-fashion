@@ -174,7 +174,7 @@ export const setRole = mutation({
     }
 
     if (args.role === "reseller") {
-      const base = (target.name ?? "NABILA")
+      const base = (target.name ?? "NABI")
         .replace(/[^a-zA-Z]/g, "")
         .slice(0, 4)
         .toUpperCase();

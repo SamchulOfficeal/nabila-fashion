@@ -44,7 +44,7 @@ const PERKS = [
 ] as const;
 
 export default function Reseller() {
-  const { supportPhone, money } = useShop();
+  const { supportPhone, money, storeName } = useShop();
   const { isAuthenticated } = useAuth();
   const profile = useQuery(api.profile.get);
 
@@ -54,7 +54,7 @@ export default function Reseller() {
     <div className="mx-auto w-full max-w-6xl px-4 pt-8 sm:px-6 lg:px-8">
       <Seo
         title="Reseller programme"
-        description="Earn commission on every NABILA FASHION parcel you refer. Share your code, get paid weekly after delivery."
+        description={`Earn commission on every ${storeName} parcel you refer. Share your code, get paid weekly after delivery.`}
       />
 
       <motion.section
@@ -72,7 +72,7 @@ export default function Reseller() {
             Reseller programme
           </span>
           <h1 className="mt-3 font-display text-3xl leading-tight font-semibold tracking-tight sm:text-5xl">
-            Sell NABILA to your circle and{" "}
+            Sell {storeName.replace(/ FASHION$/i, "")} to your circle and{" "}
             <span className="text-gradient-rose">earn on every parcel</span>.
           </h1>
           <p className="mt-4 text-sm leading-6 text-muted-foreground sm:text-base">

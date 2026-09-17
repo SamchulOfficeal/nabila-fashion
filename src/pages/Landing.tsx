@@ -81,7 +81,7 @@ const MARQUEE_ITEMS = [
 ];
 
 export default function Landing() {
-  const { t, money, locale } = useShop();
+  const { t, money, locale, storeName } = useShop();
   const navigate = useNavigate();
 
   const banners = useQuery(api.banners.list);
@@ -110,7 +110,7 @@ export default function Landing() {
   return (
     <div className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8">
       <Seo
-        title="NABILA FASHION — Premium Women's Fashion Boutique"
+        title={`${storeName} — Premium Women's Fashion Boutique`}
         description="Handloom sarees, three piece sets, abayas, gowns, bags and jewellery. Cash on delivery across Bangladesh with free delivery over ৳4,000."
         image={activeSlide?.image}
       />
@@ -154,7 +154,7 @@ export default function Landing() {
                 >
                   <span className="glass-strong inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-[10px] font-semibold tracking-[0.22em] uppercase">
                     <Sparkles className="size-3 text-primary" strokeWidth={2} />
-                    {activeSlide?.eyebrow ?? "NABILA FASHION"}
+                    {activeSlide?.eyebrow ?? storeName}
                   </span>
                   <h1 className="mt-5 font-display text-[2.35rem] leading-[1.05] font-semibold tracking-tight sm:text-5xl lg:text-[3.9rem]">
                     {activeSlide?.title ?? "Premium women's fashion, made in Bangladesh"}

@@ -165,6 +165,7 @@ const schema = defineSchema(
       commission: v.optional(v.number()),
       paymentMethod: v.union(v.literal("cod"), v.literal("online"), v.literal("bkash"), v.literal("nagad")),
       paymentReference: v.optional(v.string()),
+      acceptedTerms: v.optional(v.boolean()),
       courierName: v.optional(v.string()),
       consignmentCode: v.optional(v.string()),
       paymentStatus: v.union(v.literal("unpaid"), v.literal("paid")),

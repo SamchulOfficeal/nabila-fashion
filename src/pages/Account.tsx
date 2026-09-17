@@ -36,7 +36,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function Account() {
-  const { t, money } = useShop();
+  const { t, money, storeName } = useShop();
   const {
     signOut,
     user,
@@ -140,7 +140,7 @@ export default function Account() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pt-8 sm:px-6 lg:px-8">
-      <Seo title="My account" description="Manage your NABILA FASHION account." />
+      <Seo title="My account" description={`Manage your ${storeName} account.`} />
 
       <header className="glass rounded-[2rem] p-6 sm:p-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -153,7 +153,7 @@ export default function Account() {
                 {t("account.welcome")}
               </p>
               <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight">
-                {profile.name || "NABILA customer"}
+                {profile.name || `${storeName} customer`}
               </h1>
               <p className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {profile.email || "Guest session"}

@@ -26,7 +26,7 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export default function Orders() {
-  const { t, money } = useShop();
+  const { t, money, storeName } = useShop();
   const orders = useQuery(api.orders.myOrders);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -40,7 +40,7 @@ export default function Orders() {
 
   return (
     <div className="mx-auto w-full max-w-5xl px-4 pt-8 sm:px-6 lg:px-8">
-      <Seo title="My orders" description="Track your NABILA FASHION orders." />
+      <Seo title="My orders" description={`Track your ${storeName} orders.`} />
 
       <header>
         <span className="text-[10px] font-semibold tracking-[0.24em] text-primary uppercase">
@@ -50,7 +50,7 @@ export default function Orders() {
           {t("orders.title")}
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {orders.length} order{orders.length === 1 ? "" : "s"} placed with NABILA FASHION
+          {orders.length} order{orders.length === 1 ? "" : "s"} placed with {storeName}
         </p>
       </header>
 

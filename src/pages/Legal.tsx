@@ -5,9 +5,11 @@ import { formatDate } from "@/lib/utils";
 import { useQuery } from "@/services/firebase/hooks";
 import { FileText, Loader2 } from "lucide-react";
 import { Link, useParams } from "react-router";
+import { useShop } from "@/context/app-context";
 
 export default function Legal() {
   const { slug = "" } = useParams();
+  const { storeName } = useShop();
   const page = useQuery(api.legal.get, { slug });
   const pages = useQuery(api.legal.list);
 
@@ -23,7 +25,7 @@ export default function Legal() {
     <div className="mx-auto w-full max-w-4xl px-4 pt-10 sm:px-6 lg:px-8">
       <Seo
         title={page?.title ?? "Legal"}
-        description={`${page?.title ?? "Legal information"} for NABILA FASHION.`}
+        description={`${page?.title ?? "Legal information"} for ${storeName}.`}
       />
 
       <nav className="flex flex-wrap gap-2">
@@ -60,7 +62,7 @@ export default function Legal() {
       ) : (
         <article className="glass mt-6 rounded-[2rem] p-6 sm:p-10">
           <span className="text-[10px] font-semibold tracking-[0.24em] text-primary uppercase">
-            NABILA FASHION
+            {storeName}
           </span>
           <h1 className="mt-3 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
             {page.title}

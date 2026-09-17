@@ -19,7 +19,7 @@ import {
 import { Link, useNavigate } from "react-router";
 
 export default function Cart() {
-  const { t, money, freeDeliveryThreshold } = useShop();
+  const { t, money, freeDeliveryThreshold, storeName } = useShop();
   const { items, subtotal, count, isLoading, updateQuantity, remove } = useCart();
   const { toggle } = useWishlist();
   const setCartOpen = useUiStore((state) => state.setCartOpen);
@@ -30,7 +30,7 @@ export default function Cart() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-      <Seo title="Your bag" description="Review the pieces in your NABILA FASHION bag." />
+      <Seo title="Your bag" description={`Review the pieces in your ${storeName} bag.`} />
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>

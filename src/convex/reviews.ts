@@ -84,7 +84,7 @@ export const add = mutation({
     await ctx.db.insert("reviews", {
       productId: args.productId,
       userId: user._id,
-      authorName: user.name ?? "NABILA customer",
+      authorName: user.name ?? "Customer",
       rating,
       comment,
       createdAt: Date.now(),

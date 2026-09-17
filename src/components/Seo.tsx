@@ -1,3 +1,4 @@
+import { useShop } from "@/context/app-context";
 import { useEffect } from "react";
 
 type SeoProps = {
@@ -29,12 +30,15 @@ function upsertCanonical(href: string) {
 
 /** Per-route SEO metadata. Metadata is applied through a small effect to avoid extra deps. */
 export function Seo({ title, description, image, type = "website" }: SeoProps) {
+  // Issue 7: brand metadata follows the admin-configured store name.
+  const { storeName } = useShop();
+
   useEffect(() => {
-    const fullTitle = title.includes("NABILA") ? title : `${title} · NABILA FASHION`;
+    const fullTitle = title.includes(storeName) ? title : `${title} · ${storeName}`;
     document.title = fullTitle;
     upsertMeta('meta[property="og:title"]', "property", "og:title", fullTitle);
     upsertMeta('meta[property="og:type"]', "property", "og:type", type);
-    upsertMeta('meta[property="og:site_name"]', "property", "og:site_name", "NABILA FASHION");
+    upsertMeta('meta[property="og:site_name"]', "property", "og:site_name", storeName);
     upsertCanonical(window.location.origin + window.location.pathname);
 
     if (description) {
@@ -50,7 +54,7 @@ export function Seo({ title, description, image, type = "website" }: SeoProps) {
       upsertMeta('meta[property="og:image"]', "property", "og:image", image);
       upsertMeta('meta[name="twitter:image"]', "name", "twitter:image", image);
     }
-  }, [title, description, image, type]);
+  }, [title, description, image, type, storeName]);
 
   return null;
 }

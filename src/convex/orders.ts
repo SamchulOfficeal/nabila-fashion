@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, type QueryCtx } from "./_generated/server";
 import { effectivePrice } from "./catalog";
 import { resolveCoupon } from "./coupons";
 import { cleanText, getViewer, isStaff, requireStaff, requireUser } from "./lib/access";
@@ -8,6 +8,23 @@ import { deliveryChargeFor, divisionNames } from "./lib/delivery";
 import { orderStatusValidator } from "./schema";
 
 const MAX_ORDER_LINES = 40;
+
+/**
+ * Issue 10: store-wide default reseller commission (৳ per unit) from admin
+ * settings, used when a product does not define its own rate.
+ */
+async function readDefaultCommission(ctx: QueryCtx) {
+  try {
+    const row = await ctx.db
+      .query("settings")
+      .withIndex("key", (q) => q.eq("key", "commissionDefault"))
+      .first();
+    const rate = Number(row?.value);
+    return Number.isFinite(rate) && rate >= 0 ? rate : 0;
+  } catch {
+    return 0;
+  }
+}
 
 function buildOrderNumber(): string {
   const now = new Date();
@@ -32,13 +49,24 @@ export const placeOrder = mutation({
     note: v.optional(v.string()),
     couponCode: v.optional(v.string()),
     resellerCode: v.optional(v.string()),
-    paymentMethod: v.union(v.literal("cod"), v.literal("online")),
+    paymentMethod: v.union(v.literal("cod"), v.literal("bkash"), v.literal("nagad"), v.literal("online")),
+    paymentReference: v.optional(v.string()),
+    acceptedTerms: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const user = await requireUser(ctx);
 
+    // Issue 8: the customer must accept the store terms before checkout.
+    if (args.acceptedTerms !== true) {
+      throw new Error("Please accept the terms & conditions to place your order.");
+    }
+
+    // Issue 9: reject single-word or gibberish names before an order is created.
     const name = cleanText(args.customerName, 80);
     if (name.length < 2) throw new Error("Please enter your full name.");
+    if (!name.includes(" ")) {
+      throw new Error("Please enter your full name (first and last name).");
+    }
     // Normalise +8801XXXXXXXXX / 8801XXXXXXXXX / 01XXXXXXXXX to a bare 11 digit number.
     const digits = args.phone.replace(/\D/g, "");
     const phone = digits.startsWith("88") && digits.length === 13 ? digits.slice(2) : digits;
@@ -90,12 +118,31 @@ export const placeOrder = mutation({
       });
     }
 
+    // Issue 10: payment reference (bKash/Nagad trxID or sender number) is
+    // validated and stored server-side, never trusted from the client.
+    let paymentReference: string | undefined;
+    if (args.paymentMethod === "bkash" || args.paymentMethod === "nagad") {
+      const reference = cleanText(args.paymentReference ?? "", 60);
+      const looksLikeTxn = /^[A-Za-z0-9]{6,20}$/.test(reference);
+      const looksLikePhone = /^01[3-9]\d{8}$/.test(reference.replace(/\D/g, ""));
+      if (!looksLikeTxn && !looksLikePhone) {
+        throw new Error(
+          `Enter the ${args.paymentMethod === "bkash" ? "bKash" : "Nagad"} transaction ID or the mobile number you paid from.`,
+        );
+      }
+      paymentReference = reference;
+    }
+
     const deliveryCharge = deliveryChargeFor(args.division, subtotal);
     const applied = args.couponCode
       ? await resolveCoupon(ctx, args.couponCode, subtotal)
       : null;
     const discount = applied?.discount ?? 0;
     const total = Math.max(0, subtotal + deliveryCharge - discount);
+
+    // Issue 10: read the store-wide default commission BEFORE use so an
+    // invalid reseller code never pays commission, and never trusts the client.
+    const defaultCommission = await readDefaultCommission(ctx);
 
     // Reseller commission is computed from live product data, never from the client.
     let resellerId: Doc<"orders">["resellerId"];
@@ -113,7 +160,10 @@ export const placeOrder = mutation({
         let earned = 0;
         for (const item of items) {
           const product = await ctx.db.get(item.productId);
-          earned += (product?.resellerCommission ?? 0) * item.quantity;
+          // Issue 10: commission follows each product's own rate; when unset,
+          // fall back to the store-wide default from admin settings.
+          earned +=
+            (product?.resellerCommission ?? defaultCommission) * item.quantity;
         }
         commission = Math.round(earned);
       }
@@ -142,6 +192,8 @@ export const placeOrder = mutation({
       resellerId,
       commission,
       paymentMethod: args.paymentMethod,
+      paymentReference,
+      acceptedTerms: true,
       paymentStatus: "unpaid",
       status: "pending",
       statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }],

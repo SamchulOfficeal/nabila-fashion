@@ -9,7 +9,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 
 export default function Wishlist() {
-  const { t } = useShop();
+  const { t, storeName } = useShop();
   const { items, isLoading, remove } = useWishlist();
   const { add } = useCart();
   const navigate = useNavigate();
@@ -26,7 +26,7 @@ export default function Wishlist() {
 
   return (
     <div className="mx-auto w-full max-w-7xl px-4 pt-8 sm:px-6 lg:px-8">
-      <Seo title="Your wishlist" description="Pieces you have saved at NABILA FASHION." />
+      <Seo title="Your wishlist" description={`Pieces you have saved at ${storeName}.`} />
 
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
