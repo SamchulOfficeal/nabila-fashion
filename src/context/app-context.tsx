@@ -25,6 +25,10 @@ type ShopContextValue = {
   chatEnabled: boolean;
   chatGreeting: string;
   freeDeliveryThreshold: number;
+  paymentBkashEnabled: boolean;
+  paymentBkashNumber: string;
+  paymentNagadEnabled: boolean;
+  paymentNagadNumber: string;
 };
 
 const ShopContext = createContext<ShopContextValue | null>(null);
@@ -40,6 +44,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     chatEnabled?: boolean | string;
     chatGreeting?: string;
     freeDeliveryThreshold?: number;
+    paymentBkashEnabled?: boolean | string;
+    paymentBkashNumber?: string;
+    paymentNagadEnabled?: boolean | string;
+    paymentNagadNumber?: string;
   }>(api.settings.publicConfig);
 
   const currency = useUiStore((state) => state.currency);
@@ -81,6 +89,10 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       chatEnabled: config?.chatEnabled !== false && config?.chatEnabled !== "false",
       chatGreeting: config?.chatGreeting ?? "Hello! How can we help you today?",
       freeDeliveryThreshold: config?.freeDeliveryThreshold ?? 4000,
+      paymentBkashEnabled: config?.paymentBkashEnabled === true || config?.paymentBkashEnabled === "true",
+      paymentBkashNumber: config?.paymentBkashNumber ?? "",
+      paymentNagadEnabled: config?.paymentNagadEnabled === true || config?.paymentNagadEnabled === "true",
+      paymentNagadNumber: config?.paymentNagadNumber ?? "",
     }),
     [config, currency, locale, theme, setCurrency, setLocale, toggleTheme, usdRate],
   );

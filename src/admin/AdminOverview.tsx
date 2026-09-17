@@ -1,6 +1,7 @@
 import { Seo } from "@/components/Seo";
 import { SmartImage } from "@/components/SmartImage";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/services/firebase/api";
 import { useShop } from "@/context/app-context";
 import { cn, formatCompact, formatDateTime } from "@/lib/utils";
@@ -9,7 +10,6 @@ import { motion } from "framer-motion";
 import {
   AlertTriangle,
   Boxes,
-  Loader2,
   Package,
   ShoppingCart,
   TrendingUp,
@@ -33,8 +33,18 @@ export function AdminOverview() {
 
   if (data === undefined) {
     return (
-      <div className="grid place-items-center py-32">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
+      <div className="space-y-5">
+        <div>
+          <Skeleton className="h-7 w-56" />
+          <Skeleton className="mt-2 h-4 w-80 max-w-full" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-28 rounded-2xl" />
+          ))
+          }
+        </div>
+        <Skeleton className="h-64 rounded-3xl" />
       </div>
     );
   }

@@ -52,7 +52,9 @@ export default function Checkout() {
     note: "",
     resellerCode: "",
   });
-  const [payment, setPayment] = useState<"cod" | "online">("cod");
+  const [payment, setPayment] = useState<"cod" | "bkash" | "nagad">("cod");
+  const { paymentBkashEnabled, paymentBkashNumber, paymentNagadEnabled, paymentNagadNumber } = useShop();
+  const [paymentReference, setPaymentReference] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [appliedCode, setAppliedCode] = useState("");
   const [busy, setBusy] = useState(false);
@@ -92,6 +94,14 @@ export default function Checkout() {
     const address = form.address.trim().replace(/\s+/g, " ");
     if (address.length < 10 || !/[A-Za-z\u0980-\u09FF]/.test(address)) {
       found.address = "Enter a complete address with house, road or area details.";
+    }
+    if (payment !== "cod") {
+      const ref = paymentReference.trim();
+      const looksLikeTxn = /^[A-Za-z0-9]{6,20}$/.test(ref);
+      const looksLikePhone = /^01[3-9]\d{8}$/.test(ref.replace(/\D/g, ""));
+      if (!looksLikeTxn && !looksLikePhone) {
+        found.paymentReference = `Enter the ${payment === "bkash" ? "bKash" : "Nagad"} transaction ID or the mobile number you paid from.`;
+      }
     }
     return found;
   };
@@ -191,6 +201,7 @@ export default function Checkout() {
         couponCode: coupon?.ok ? appliedCode : undefined,
         resellerCode: form.resellerCode.trim() || undefined,
         paymentMethod: payment,
+        paymentReference: payment !== "cod" ? paymentReference.trim() || undefined : undefined,
       });
 
       toast.success(`${t("checkout.success")} · ${result.orderNumber}`, {
@@ -429,24 +440,62 @@ export default function Checkout() {
                   {t("checkout.codHint")}
                 </span>
               </button>
-              <button
-                type="button"
-                disabled
-                className="cursor-not-allowed rounded-2xl border border-border/60 p-4 text-left opacity-60"
-              >
-                <span className="flex items-center gap-2 font-medium">
-                  <CreditCard className="size-4" strokeWidth={1.8} />
-                  {t("checkout.online")}
-                </span>
-                <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">
-                  {t("checkout.onlineHint")}
-                </span>
-              </button>
+              {[
+                { id: "bkash" as const, enabled: paymentBkashEnabled, number: paymentBkashNumber, label: "bKash", color: "text-[#d12053]" },
+                { id: "nagad" as const, enabled: paymentNagadEnabled, number: paymentNagadNumber, label: "Nagad", color: "text-[#f6921e]" },
+              ].map((msf) => (
+                <button
+                  key={msf.id}
+                  type="button"
+                  disabled={!msf.enabled}
+                  onClick={() => setPayment(msf.id)}
+                  className={cn(
+                    "rounded-2xl border p-4 text-left transition-colors",
+                    !msf.enabled && "cursor-not-allowed opacity-60",
+                    msf.enabled && payment === msf.id
+                      ? "border-primary bg-brand-blush/60"
+                      : "border-border/60 hover:bg-accent",
+                  )}
+                >
+                  <span className="flex items-center gap-2 font-medium">
+                    <CreditCard className={cn("size-4", msf.enabled ? msf.color : "text-muted-foreground")} strokeWidth={1.8} />
+                    {msf.label}
+                    {payment === msf.id && (
+                      <BadgeCheck className="ml-auto size-4 text-primary" strokeWidth={1.8} />
+                    )}
+                  </span>
+                  <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">
+                    {msf.enabled
+                      ? `Send payment to ${msf.number}, then place the order — we confirm by phone.`
+                      : "Enable bKash/Nagad from Admin → Settings → Payments."}
+                  </span>
+                </button>
+              ))}
             </div>
             <p className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground">
               <ShieldCheck className="size-3.5 text-primary" strokeWidth={1.8} />
               Your order is verified by phone before dispatch. No card details are ever
               stored.
+              {payment !== "cod" && (
+                <div className="mt-3 space-y-1.5">
+                  <Label htmlFor="paymentReference">
+                    {payment === "bkash" ? "bKash" : "Nagad"} transaction ID / sender number
+                  </Label>
+                  <Input
+                    id="paymentReference"
+                    inputMode="text"
+                    maxLength={60}
+                    placeholder={payment === "bkash" ? "e.g. 9F7HK2LM35" : "e.g. 01712345678"}
+                    value={paymentReference}
+                    onChange={(event) => setPaymentReference(event.target.value)}
+                    className="h-11 rounded-xl"
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Sent to <strong>{payment === "bkash" ? paymentBkashNumber : paymentNagadNumber}</strong> · verify before dispatch.
+                  </p>
+                  {errors.paymentReference && <FieldError message={errors.paymentReference} />}
+                </div>
+              )}
             </p>
           </section>
         </div>
