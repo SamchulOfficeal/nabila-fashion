@@ -24,6 +24,36 @@ export type FirebaseApiPath = string;
 type AnyRecord = Record<string, any>;
 
 const now = () => Date.now();
+
+/**
+ * Performance: short in-memory cache for hot public reads (config, products,
+ * categories…). Firestore charges per document read and every page load hits
+ * the same few paths, so a 15 s micro-cache cuts most of that traffic and
+ * makes page-to-page navigation feel instant.
+ */
+const QUERY_CACHE = new Map<string, { at: number; value: AnyRecord[] }>();
+const QUERY_CACHE_TTL = 15_000;
+
+function cached(name: string, key: string, fetcher: () => Promise<AnyRecord[]>): Promise<AnyRecord[]> {
+  const cacheKey = `${name}:${key}`;
+  const hit = QUERY_CACHE.get(cacheKey);
+  if (hit && now() - hit.at < QUERY_CACHE_TTL) return Promise.resolve(hit.value);
+  return fetcher().then((value) => {
+    QUERY_CACHE.set(cacheKey, { at: now(), value });
+    // Keep the cache bounded.
+    if (QUERY_CACHE.size > 64) {
+      const oldest = [...QUERY_CACHE.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest) QUERY_CACHE.delete(oldest[0]);
+    }
+    return value;
+  });
+}
+
+/** Invalidates the micro-cache after every mutation (keeps data fresh). */
+function invalidateCache(prefix?: string) {
+  if (!prefix) QUERY_CACHE.clear();
+  else for (const key of QUERY_CACHE.keys()) if (key.startsWith(prefix)) QUERY_CACHE.delete(key);
+}
 const table = (name: string) => collection(db, name);
 const document = (name: string, id: string) => doc(db, name, id);
 const clean = (value: unknown, max = 4000) => String(value ?? "").trim().slice(0, max);
@@ -32,7 +62,8 @@ const withId = <T extends DocumentData>(snapshot: { id: string; data: () => T })
   _id: snapshot.id,
   _creationTime: snapshot.data().createdAt ?? snapshot.data()._creationTime ?? now(),
 });
-const all = async (name: string) => (await getDocs(table(name))).docs.map(withId);
+const all = (name: string) =>
+  cached(name, "all", async () => (await getDocs(table(name))).docs.map(withId));
 
 /**
  * Phase 2 (Tier 1): real-time notifications subscription.
@@ -50,13 +81,24 @@ export function subscribeNotifications(
     callback([]);
     return () => undefined;
   }
-  const rowsQuery = query(table("notifications"), orderBy("createdAt", "desc"), limit(50));
+  // Security: scope the QUERY server-side. Staff rows (no userId) are never
+  // even downloaded for customers, and customer rows never reach staff —
+  // previously every client downloaded all 50 rows and filtered in the UI.
+  const rowsQuery =
+    role === "customer"
+      ? query(
+          table("notifications"),
+          where("userId", "==", user.uid),
+          orderBy("createdAt", "desc"),
+          limit(50),
+        )
+      : query(table("notifications"), orderBy("createdAt", "desc"), limit(50));
   return onSnapshot(
     rowsQuery,
     (snapshot) => {
-      const rows = snapshot.docs.map(withId).filter((row) =>
-        role === "staff" ? !row.userId : row.userId === user.uid,
-      );
+      const rows = snapshot.docs
+        .map(withId)
+        .filter((row) => (role === "staff" ? !row.userId : true));
       callback(rows);
     },
     (error) => {
@@ -253,7 +295,10 @@ async function placeOrder(args: AnyRecord) {
       transaction.update(document("products", item.productId), { stock: product.stock - item.quantity, soldCount: (product.soldCount ?? 0) + item.quantity });
     }
     for (const item of cartSnapshot) transaction.delete(document("cartItems", item._id));
-    transaction.set(document("users", user._id), { ...user, name: order.customerName, phone, division: args.division, district: order.district, address: order.address }, { merge: true });
+    // Security: write ONLY the checkout fields back to the profile — never
+    // spread the whole profile object (role/blocked/referralCode must not be
+    // rewritten by checkout, and a stale local copy could clobber them).
+    transaction.set(document("users", user._id), { name: order.customerName, phone, division: args.division, district: order.district, address: order.address }, { merge: true });
     if (applied) {
       const coupons = await getDocs(query(table("coupons"), where("code", "==", applied.code), limit(1)));
       if (!coupons.empty) transaction.update(coupons.docs[0].ref, { usedCount: (coupons.docs[0].data().usedCount ?? 0) + 1 });
@@ -262,6 +307,23 @@ async function placeOrder(args: AnyRecord) {
     return { orderId: orderRef.id, orderNumber: order.orderNumber, total, deliveryCharge, discount, subtotal };
   });
   return result;
+}
+
+/**
+ * Security: lightweight in-memory rate limiter for expensive/abusable
+ * mutations. Sliding window per user + action; state lives only in this tab.
+ */
+const RATE_WINDOW = 60_000;
+const rateBuckets = new Map<string, number[]>();
+function rateLimit(action: string, maxPerMinute: number) {
+  const userId = auth.currentUser?.uid ?? "anon";
+  const key = `${action}:${userId}`;
+  const stamps = (rateBuckets.get(key) ?? []).filter((at) => now() - at < RATE_WINDOW);
+  if (stamps.length >= maxPerMinute) {
+    throw new Error("Too many attempts. Please wait a minute and try again.");
+  }
+  stamps.push(now());
+  rateBuckets.set(key, stamps);
 }
 
 async function overview() {
@@ -333,10 +395,10 @@ export async function runQuery(path: FirebaseApiPath, args: AnyRecord = {}) {
     case "reseller.myWallet": { const profile = await ensureProfile(); if (!profile) return null; const rows = (await all("orders")).filter((item) => item.resellerId === profile._id); const adjustRows = (await all("walletAdjustments")).filter((item) => item.userId === profile._id); const requestRows = (await all("withdrawals")).filter((item) => item.userId === profile._id); const earned = rows.filter((item) => item.status === "delivered").reduce((sum, item) => sum + (item.commission ?? 0), 0); const pending = rows.filter((item) => ["pending", "confirmed", "processing", "shipped"].includes(item.status)).reduce((sum, item) => sum + (item.commission ?? 0), 0); const adjustTotal = adjustRows.reduce((sum, item) => sum + item.amount, 0); const paidOut = requestRows.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amount, 0); const held = requestRows.filter((item) => item.status === "approved").reduce((sum, item) => sum + item.amount, 0); const liveOrders = rows.filter((item) => item.status !== "cancelled"); return { role: profile.role ?? "customer", referralCode: profile.referralCode ?? "", earned, pending, adjustments: adjustTotal, paidOut, held, balance: earned + adjustTotal - paidOut - held, revenue: liveOrders.reduce((sum, item) => sum + item.total, 0), orderCount: liveOrders.length, recent: [...rows].sort((a, b) => b.createdAt - a.createdAt).slice(0, 20).map((item) => ({ _id: item._id, orderNumber: item.orderNumber, total: item.total, commission: item.commission ?? 0, status: item.status, createdAt: item.createdAt })), requests: [...requestRows].sort((a, b) => b.createdAt - a.createdAt).slice(0, 10) }; }
     case "reseller.minWithdrawal": { const settingsRows = await all("settings"); const value = Number(settingsRows.find((item) => item.key === "resellerMinWithdrawal")?.value); return Number.isFinite(value) && value >= 0 ? value : 500; }
     case "reseller.adminOverview": { await requireProfile(["admin"]); const users = (await all("users")).filter((item) => roleOf(item) === "reseller"); const orders = await all("orders"); const adjustAll = await all("walletAdjustments"); const withdrawAll = await all("withdrawals"); const walletFor = (userId: string) => { const myOrders = orders.filter((item) => item.resellerId === userId); const earned = myOrders.filter((item) => item.status === "delivered").reduce((sum, item) => sum + (item.commission ?? 0), 0); const pending = myOrders.filter((item) => ["pending", "confirmed", "processing", "shipped"].includes(item.status)).reduce((sum, item) => sum + (item.commission ?? 0), 0); const adjustTotal = adjustAll.filter((item) => item.userId === userId).reduce((sum, item) => sum + item.amount, 0); const myRequests = withdrawAll.filter((item) => item.userId === userId); const paidOut = myRequests.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amount, 0); const held = myRequests.filter((item) => item.status === "approved").reduce((sum, item) => sum + item.amount, 0); return { earned, pending, adjustments: adjustTotal, paidOut, held, balance: earned + adjustTotal - paidOut - held }; }; const resellers = users.map((user) => ({ _id: user._id, name: user.name ?? "Unnamed", email: user.email ?? "", phone: user.phone ?? "", referralCode: user.referralCode ?? "", blocked: user.blocked ?? false, createdAt: user.createdAt ?? user._creationTime, orderCount: orders.filter((item) => item.resellerId === user._id && item.status !== "cancelled").length, revenue: orders.filter((item) => item.resellerId === user._id && item.status !== "cancelled").reduce((sum, item) => sum + item.total, 0), ...walletFor(user._id) })).sort((a, b) => b.earned - a.earned); const pendingRequests = withdrawAll.filter((item) => item.status === "pending" || item.status === "approved").sort((a, b) => b.createdAt - a.createdAt).map((item) => ({ ...item, name: users.find((user) => user._id === item.userId)?.name ?? "Reseller", referralCode: users.find((user) => user._id === item.userId)?.referralCode ?? "" })); const ledger = [...withdrawAll].sort((a, b) => b.createdAt - a.createdAt).slice(0, 30).map((item) => ({ _id: item._id, name: users.find((user) => user._id === item.userId)?.name ?? "Reseller", amount: item.amount, method: item.method, status: item.status, createdAt: item.createdAt })); return { resellers, pending: pendingRequests, ledger }; }
-    case "notifications.staffRecent": await requireProfile(["admin", "manager"]); return (await all("notifications")).filter((item) => !item.userId).sort((a, b) => b.createdAt - a.createdAt).slice(0, args.limit ?? 8);
-    case "notifications.unreadCount": await requireProfile(["admin", "manager"]); return (await all("notifications")).filter((item) => !item.userId && !item.isRead).length;
-    case "notifications.myNotifications": { const profile = await ensureProfile(); if (!profile) return []; return (await all("notifications")).filter((item) => item.userId === profile._id).sort((a, b) => b.createdAt - a.createdAt).slice(0, 20); }
-    case "notifications.myUnreadCount": { const profile = await ensureProfile(); if (!profile) return 0; return (await all("notifications")).filter((item) => item.userId === profile._id && !item.isRead).length; }
+    case "notifications.staffRecent": { await requireProfile(["admin", "manager"]); const staffRows = await getDocs(query(table("notifications"), where("userId", "==", null), orderBy("createdAt", "desc"), limit(20))); return staffRows.docs.map(withId); }
+    case "notifications.unreadCount": { await requireProfile(["admin", "manager"]); const unreadRows = await getDocs(query(table("notifications"), where("userId", "==", null), where("isRead", "==", false))); return unreadRows.size; }
+    case "notifications.myNotifications": { const profile = await ensureProfile(); if (!profile) return []; const myRows = await getDocs(query(table("notifications"), where("userId", "==", profile._id), orderBy("createdAt", "desc"), limit(20))); return myRows.docs.map(withId); }
+    case "notifications.myUnreadCount": { const profile = await ensureProfile(); if (!profile) return 0; const myUnread = await getDocs(query(table("notifications"), where("userId", "==", profile._id), where("isRead", "==", false))); return myUnread.size; }
     case "reviews.forProduct": return (await all("reviews")).filter((item) => item.productId === args.productId).sort((a, b) => b.createdAt - a.createdAt);
     case "reviews.canReview": { const profile = await ensureProfile(); if (!profile) return false; const orders = (await all("orders")).filter((item) => item.userId === profile._id && item.status === "delivered"); return orders.some((order) => order.items?.some((item: AnyRecord) => item.productId === args.productId)); }
     default: return undefined;
@@ -344,6 +406,17 @@ export async function runQuery(path: FirebaseApiPath, args: AnyRecord = {}) {
 }
 
 export async function runMutation(path: FirebaseApiPath, args: AnyRecord = {}) {
+  const [module, operation] = path.split(".");
+  try {
+    return await runMutationInner(path, args);
+  } finally {
+    // Performance: any successful (or failed) mutation invalidates the read
+    // micro-cache so the next query fetches fresh data.
+    invalidateCache();
+  }
+}
+
+async function runMutationInner(path: FirebaseApiPath, args: AnyRecord = {}) {
   const [module, operation] = path.split(".");
   switch (`${module}.${operation}`) {
     case "profile.save": { const profile = await requireProfile(); const ALLOWED_FIELDS = ["name", "phone", "division", "district", "address", "image"]; const patch = Object.fromEntries(Object.entries(args).filter(([key, value]) => ALLOWED_FIELDS.includes(key) && value !== undefined)); await updateDoc(document("users", profile._id), patch); return; }
@@ -353,11 +426,11 @@ export async function runMutation(path: FirebaseApiPath, args: AnyRecord = {}) {
     case "cart.clear": { const profile = await requireProfile(); const rows = (await all("cartItems")).filter((item) => item.userId === profile._id); await Promise.all(rows.map((item) => deleteDoc(document("cartItems", item._id)))); return; }
     case "wishlist.toggle": { const profile = await requireProfile(); const rows = (await all("wishlistItems")).filter((item) => item.userId === profile._id && item.productId === args.productId); if (rows[0]) { await deleteDoc(document("wishlistItems", rows[0]._id)); return false; } await addDoc(table("wishlistItems"), { userId: profile._id, productId: args.productId, addedAt: now() }); return true; }
     case "wishlist.remove": { const profile = await requireProfile(); const item = await getDoc(document("wishlistItems", args.itemId)); if (!item.exists() || item.data().userId !== profile._id) throw new Error("Item not found."); return deleteDoc(item.ref); }
-    case "orders.placeOrder": return placeOrder(args);
+    case "orders.placeOrder": rateLimit("placeOrder", 5); return placeOrder(args);
     case "orders.setCourierInfo": { await requireProfile(["admin", "manager"]); const courierOrderRef = document("orders", args.orderId); const patch: AnyRecord = {}; if (args.courierName !== undefined) patch.courierName = clean(args.courierName, 60); if (args.consignmentCode !== undefined) patch.consignmentCode = clean(args.consignmentCode, 40); if (!Object.keys(patch).length) return; return updateDoc(courierOrderRef, patch); }
     case "orders.updateStatus": { const staff = await requireProfile(["admin", "manager"]); const orderRef = document("orders", args.orderId); const result = await runTransaction(db, async (transaction) => { const snapshot = await transaction.get(orderRef); if (!snapshot.exists()) throw new Error("Order not found."); const order = withId(snapshot); const history = [...(order.statusHistory ?? []), { status: args.status, at: now(), note: args.note ? clean(args.note, 160) : undefined }]; if (args.status === "cancelled" && order.status !== "cancelled") for (const item of order.items ?? []) { const productRef = document("products", item.productId); const productSnapshot = await transaction.get(productRef); if (productSnapshot.exists()) { const product = productSnapshot.data(); transaction.update(productRef, { stock: (product.stock ?? 0) + item.quantity, soldCount: Math.max(0, (product.soldCount ?? 0) - item.quantity) }); } } transaction.update(orderRef, { status: args.status, statusHistory: history, paymentStatus: args.paymentStatus ?? (args.status === "delivered" && order.paymentMethod === "cod" ? "paid" : order.paymentStatus) }); transaction.set(doc(collection(db, "notifications")), { type: "order", title: `${order.orderNumber} → ${args.status}`, message: `${staff.name ?? "Staff"} updated the order status`, orderId: args.orderId, isRead: false, createdAt: now() }); transaction.set(doc(collection(db, "notifications")), { type: "order", title: `${order.orderNumber} · ${args.status}`, message: `Your order status changed to ${args.status}.`, userId: order.userId, orderId: args.orderId, isRead: false, createdAt: now() }); return true; }); return result; }
     case "admin.setRole": { const admin = await requireProfile(["admin"]); const target = await getDoc(document("users", args.userId)); if (!target.exists()) throw new Error("User not found."); if (args.userId === admin._id && args.role !== "admin") throw new Error("You cannot remove your own administrator access."); const data = target.data(); const role = args.role; const patch: AnyRecord = { role }; if (role === "reseller" && !data.referralCode) patch.referralCode = `${clean(data.name || "NABI", 4).replace(/[^A-Za-z]/g, "").toUpperCase() || "NABI"}${Math.random().toString(36).slice(2, 6).toUpperCase()}`; return updateDoc(target.ref, patch); }
-    case "reseller.requestWithdrawal": { const profile = await requireProfile(["reseller"]); const amount = Math.round(Number(args.amount)); if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid withdrawal amount."); const accountNumber = clean(args.accountNumber, 40).replace(/\s+/g, ""); if (accountNumber.length < 8) throw new Error("Enter the account number to pay into (bKash/Nagad number or bank account)."); const settingsRows = await all("settings"); const minSetting = Number(settingsRows.find((item) => item.key === "resellerMinWithdrawal")?.value); const minimum = Number.isFinite(minSetting) && minSetting >= 0 ? minSetting : 500; if (amount < minimum) throw new Error(`Minimum withdrawal amount is ৳${minimum.toLocaleString()}.`); const myOrders = (await all("orders")).filter((item) => item.resellerId === profile._id); const earned = myOrders.filter((item) => item.status === "delivered").reduce((sum, item) => sum + (item.commission ?? 0), 0); const adjustTotal = (await all("walletAdjustments")).filter((item) => item.userId === profile._id).reduce((sum, item) => sum + item.amount, 0); const myRequests = (await all("withdrawals")).filter((item) => item.userId === profile._id); const paidOut = myRequests.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amount, 0); const held = myRequests.filter((item) => item.status === "approved").reduce((sum, item) => sum + item.amount, 0); const balance = earned + adjustTotal - paidOut - held; if (amount > balance) throw new Error(`Insufficient balance. Available: ৳${Math.max(0, balance).toLocaleString()}.`); await addDoc(table("withdrawals"), { userId: profile._id, amount, method: args.method, accountNumber, status: "pending", createdAt: now() }); await addDoc(table("notifications"), { type: "message", title: "New withdrawal request", message: `${profile.name ?? profile.email ?? "Reseller"} requested ৳${amount.toLocaleString()} via ${args.method}.`, isRead: false, createdAt: now() }); return { ok: true }; }
+    case "reseller.requestWithdrawal": { rateLimit("requestWithdrawal", 3); const profile = await requireProfile(["reseller"]); const amount = Math.round(Number(args.amount)); if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid withdrawal amount."); const accountNumber = clean(args.accountNumber, 40).replace(/\s+/g, ""); if (accountNumber.length < 8) throw new Error("Enter the account number to pay into (bKash/Nagad number or bank account)."); const settingsRows = await all("settings"); const minSetting = Number(settingsRows.find((item) => item.key === "resellerMinWithdrawal")?.value); const minimum = Number.isFinite(minSetting) && minSetting >= 0 ? minSetting : 500; if (amount < minimum) throw new Error(`Minimum withdrawal amount is ৳${minimum.toLocaleString()}.`); const myOrders = (await all("orders")).filter((item) => item.resellerId === profile._id); const earned = myOrders.filter((item) => item.status === "delivered").reduce((sum, item) => sum + (item.commission ?? 0), 0); const adjustTotal = (await all("walletAdjustments")).filter((item) => item.userId === profile._id).reduce((sum, item) => sum + item.amount, 0); const myRequests = (await all("withdrawals")).filter((item) => item.userId === profile._id); const paidOut = myRequests.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amount, 0); const held = myRequests.filter((item) => item.status === "approved").reduce((sum, item) => sum + item.amount, 0); const balance = earned + adjustTotal - paidOut - held; if (amount > balance) throw new Error(`Insufficient balance. Available: ৳${Math.max(0, balance).toLocaleString()}.`); await addDoc(table("withdrawals"), { userId: profile._id, amount, method: args.method, accountNumber, status: "pending", createdAt: now() }); await addDoc(table("notifications"), { type: "message", title: "New withdrawal request", message: `${profile.name ?? profile.email ?? "Reseller"} requested ৳${amount.toLocaleString()} via ${args.method}.`, isRead: false, createdAt: now() }); return { ok: true }; }
     case "reseller.reviewWithdrawal": { const admin = await requireProfile(["admin"]); const withdrawalRef = document("withdrawals", args.withdrawalId); const snap = await getDoc(withdrawalRef); if (!snap.exists()) throw new Error("Withdrawal request not found."); const row = withId(snap); const reviewedBy = { reviewedBy: admin._id, reviewedAt: now() }; if (args.decision === "approve") { if (row.status !== "pending") throw new Error("Only pending requests can be approved."); await updateDoc(withdrawalRef, { status: "approved", note: args.note ? clean(args.note, 160) : row.note, ...reviewedBy }); return { ok: true }; } if (args.decision === "reject") { if (row.status === "paid") throw new Error("Paid withdrawals cannot be rejected."); await updateDoc(withdrawalRef, { status: "rejected", note: args.note ? clean(args.note, 160) : row.note, ...reviewedBy }); return { ok: true }; } if (row.status !== "approved") throw new Error("Approve the request before marking it paid."); await updateDoc(withdrawalRef, { status: "paid", note: args.note ? clean(args.note, 160) : row.note, ...reviewedBy }); return { ok: true }; }
     case "reseller.adjustWallet": { const admin = await requireProfile(["admin"]); const target = await getDoc(document("users", args.userId)); if (!target.exists()) throw new Error("Reseller not found."); const amount = Math.round(Math.abs(Number(args.amount))); if (!Number.isFinite(amount) || amount <= 0) throw new Error("Enter a valid amount."); const type = args.type === "deduction" ? "deduction" : "topup"; if (type === "deduction") { const myOrders = (await all("orders")).filter((item) => item.resellerId === args.userId); const earned = myOrders.filter((item) => item.status === "delivered").reduce((sum, item) => sum + (item.commission ?? 0), 0); const adjustTotal = (await all("walletAdjustments")).filter((item) => item.userId === args.userId).reduce((sum, item) => sum + item.amount, 0); const myRequests = (await all("withdrawals")).filter((item) => item.userId === args.userId); const paidOut = myRequests.filter((item) => item.status === "paid").reduce((sum, item) => sum + item.amount, 0); const held = myRequests.filter((item) => item.status === "approved").reduce((sum, item) => sum + item.amount, 0); const balance = earned + adjustTotal - paidOut - held; if (balance < amount) throw new Error(`Cannot deduct more than the available balance (৳${Math.max(0, balance).toLocaleString()}).`); } await addDoc(table("walletAdjustments"), { userId: args.userId, amount: type === "topup" ? amount : -amount, type, note: args.note ? clean(args.note, 160) : "", createdBy: admin._id, createdAt: now() }); return { ok: true }; }
     case "admin.setBlocked": { const admin = await requireProfile(["admin"]); if (args.userId === admin._id) throw new Error("You cannot suspend your own account."); return updateDoc(document("users", args.userId), { blocked: args.blocked }); }

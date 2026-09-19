@@ -203,10 +203,12 @@
   }
   html {
     -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
   body {
     @apply bg-background text-foreground font-sans antialiased;
     overflow-x: clip;
+    text-rendering: optimizeLegibility;
     background-image:
       radial-gradient(
         60rem 40rem at 8% -6%,
@@ -224,6 +226,26 @@
         transparent 60%
       );
     background-attachment: fixed;
+  }
+  /* Premium scrollbar — matches the rose/champagne palette instead of the
+     stock grey browser bar. */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--primary) 50%, transparent);
+    border: 2px solid transparent;
+    background-clip: content-box;
   }
   h1,
   h2,

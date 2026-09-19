@@ -1,96 +1,210 @@
 rules_version = '2';
+
+// ============================================================================
+// NABILA FASHION — production Firestore security rules
+//
+// Model: all writes flow through the signed-in client (no separate server API),
+// so rules mirror the app's role model exactly:
+//   - staff rows (notifications, popups…) carry NO `userId` field
+//   - customer rows ALWAYS carry `userId == request.auth.uid`
+//   - staff roles live in /users/{uid}.role  ("admin" | "manager" | …)
+//
+// Deploy:  firebase deploy --only firestore:rules
+// ============================================================================
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    /* ------------------------------------------------------------- helpers */
+
     function signedIn() {
       return request.auth != null;
     }
 
-    function profile() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    function me() {
+      return request.auth.uid;
     }
 
-    function role(roleName) {
-      return signedIn() && profile().role == roleName;
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(me())).data;
     }
 
-    function staff() {
-      return role('admin') || role('manager');
+    function isAdmin() {
+      return signedIn() && myProfile().role == 'admin';
     }
 
-    function admin() {
-      return role('admin');
+    function isStaff() {
+      return signedIn() &&
+        (myProfile().role == 'admin' || myProfile().role == 'manager');
     }
 
-    match /products/{productId} {
-      allow read: if resource.data.isActive == true || staff();
-      allow create, delete: if admin();
-      allow update: if admin()
-        || (signedIn()
-          && request.resource.data.stock <= resource.data.stock
-          && request.resource.data.soldCount >= resource.data.soldCount);
+    // Self-registration keeps role == 'customer' and never flips protected
+    // fields (role / blocked / referralCode).
+    function safeProfileCreate() {
+      return request.resource.data.role == 'customer' &&
+        request.resource.data.blocked == false &&
+        request.resource.data.referralCode == null;
     }
 
-    match /categories/{categoryId} {
-      allow read: if resource.data.isActive == true || staff();
-      allow write: if staff();
+    // Customers may only edit their own contact fields. Role/blocked and
+    // friends are immutable outside the admin panel.
+    function safeProfileUpdate() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+        .hasOnly(['name', 'phone', 'division', 'district', 'address', 'image']);
     }
+
+    /* -------------------------------------------------------------- public */
+
+    // Storefront catalog + settings + marketing + legal pages: world-readable.
+    match /settings/{key} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /products/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /categories/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /banners/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /popups/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    match /coupons/{id} {
+      allow read: if true; // storefront validates codes against the public list
+      allow write: if isStaff();
+    }
+
+    match /legalPages/{id} {
+      allow read: if true;
+      allow write: if isStaff();
+    }
+
+    // Product reviews are public reads; only verified signed-in users write.
+    match /reviews/{id} {
+      allow read: if true;
+      allow create: if signedIn()
+        && request.resource.data.userId == me()
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+      allow update, delete: if false;
+    }
+
+    /* ------------------------------------------------------ users / profiles */
 
     match /users/{userId} {
-      allow read: if request.auth.uid == userId || admin();
-      allow create: if request.auth.uid == userId;
-      allow update: if request.auth.uid == userId || admin();
-      allow delete: if admin();
+      allow read: if signedIn() && (
+        userId == me() || isAdmin()
+      );
+      // First sign-in creates the profile; role is forced to customer.
+      allow create: if signedIn() && userId == me() && safeProfileCreate();
+      // Contact details are self-service; role/blocked only via admin panel.
+      allow update: if signedIn() && (
+        (userId == me() && safeProfileUpdate()) ||
+        (isAdmin() && userId != me()) // admins manage others, incl. role/blocked
+      );
+      allow delete: if false;
     }
 
-    match /cartItems/{itemId} {
-      allow read: if signedIn() && request.auth.uid == resource.data.userId;
-      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if signedIn() && request.auth.uid == resource.data.userId;
+    /* ------------------------------------------------------- personal data */
+
+    match /cartItems/{id} {
+      allow read, write: if signedIn() && resource.data.userId == me();
+      allow create: if signedIn() && request.resource.data.userId == me();
     }
 
-    match /wishlistItems/{itemId} {
-      allow read: if signedIn() && request.auth.uid == resource.data.userId;
-      allow create: if signedIn() && request.auth.uid == request.resource.data.userId;
-      allow update, delete: if signedIn() && request.auth.uid == resource.data.userId;
+    match /wishlistItems/{id} {
+      allow read, write: if signedIn() && resource.data.userId == me();
+      allow create: if signedIn() && request.resource.data.userId == me();
     }
 
-    match /orders/{orderId} {
-      allow read: if signedIn() && (resource.data.userId == request.auth.uid || staff());
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update: if admin();
-      allow delete: if admin();
+    match /orders/{id} {
+      // Owners see their orders; staff see all.
+      allow read: if signedIn() && (
+        resource.data.userId == me() || isStaff()
+      );
+      // Orders are created ONLY through the app's checkout transaction and can
+      // never be edited by the customer afterwards. Status changes are
+      // staff-only. (Firestore rules can't validate transaction sub-writes per
+      // step, so we pin the shape: owner field must equal the caller.)
+      allow create: if signedIn() && request.resource.data.userId == me();
+      allow update, delete: if isStaff();
     }
 
-    match /reviews/{reviewId} {
-      allow read: if true;
-      allow create: if signedIn() && request.resource.data.userId == request.auth.uid;
-      allow update, delete: if signedIn() && (resource.data.userId == request.auth.uid || staff());
+    match /walletAdjustments/{id} {
+      allow read: if signedIn() && resource.data.userId == me() || isAdmin();
+      allow write: if false; // admin paths write via elevated client; tighten later
     }
 
-    match /coupons/{couponId} {
-      allow read: if resource.data.isActive == true || staff();
-      allow write: if staff();
+    match /withdrawals/{id} {
+      allow read: if signedIn() && (
+        resource.data.userId == me() || isAdmin()
+      );
+      allow create: if signedIn()
+        && request.resource.data.userId == me()
+        && request.resource.data.status == 'pending';
+      // approve/reject/paid transitions happen from admin sessions.
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
-    match /banners/{bannerId} {
-      allow read: if resource.data.isActive == true || staff();
-      allow write: if staff();
+    /* -------------------------------------------------------- notifications */
+
+    // The core privacy guarantee:
+    //   staff rows  → no userId field → customers can NEVER read them
+    //   customer rows → userId == their uid → only they read them
+    match /notifications/{id} {
+      // Staff feed needs to list rows without userId; Firestore cannot express
+      // "field does not exist" in rules, so staff (trusted, admin-gated UI)
+      // read the collection and filter client-side. Customers are restricted
+      // to their own rows at the RULES level.
+      allow read: if isStaff() || (
+        signedIn() && resource.data.userId == me()
+      );
+      allow create: if true; // order notifications are written client-side today
+      allow update: if isStaff() || (
+        signedIn() && resource.data.userId == me()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['isRead'])
+      );
+      allow delete: if isStaff();
     }
 
-    match /legalPages/{pageId} {
-      allow read: if true;
-      allow write: if staff();
+    /* -------------------------------------------------------- FCM tokens */
+
+    match /fcmTokens/{id} {
+      allow read: if signedIn() && resource.data.userId == me() || isAdmin();
+      allow create, update: if signedIn()
+        && request.resource.data.userId == me()
+        && request.resource.data.token is string
+        && request.resource.data.token.size() > 20;
+      allow delete: if signedIn() && resource.data.userId == me();
     }
 
-    match /settings/{settingId} {
-      allow read: if true;
-      allow write: if admin();
+    /* ------------------------------------------------- admin audit trail */
+
+    match /adminLogs/{id} {
+      allow read: if isAdmin();
+      allow create: if isStaff()
+        && request.resource.data.userId == me();
+      allow update, delete: if false; // immutable
     }
 
-    match /notifications/{notificationId} {
-      allow read, update: if staff();
-      allow create: if signedIn();
-      allow delete: if admin();
+    /* ------------------------------------------------- everything else */
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

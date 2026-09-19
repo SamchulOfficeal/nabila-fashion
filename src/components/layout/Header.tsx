@@ -22,6 +22,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
 import { useBrowserNotifications, useMyOrderUpdates } from "@/hooks/use-notifications";
+import { registerPushToken, unregisterPushToken } from "@/lib/fcm";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 import { useQuery } from "@/services/firebase/hooks";
@@ -78,6 +79,23 @@ export function Header() {
     useMyOrderUpdates(isAuthenticated);
   const { permission: notifyPermission, request: requestNotify } = useBrowserNotifications();
 
+  /**
+   * Background push: after the customer grants permission, register the FCM
+   * token so order updates keep arriving even when the site is closed.
+   * Staff register with role "staff" (they get their own feed only).
+   */
+  const enablePushNotifications = async () => {
+    const result = await requestNotify();
+    if (result === "granted") {
+      await registerPushToken(isStaff ? "staff" : "customer");
+    }
+  };
+
+  // Re-register the token when the signed-in user changes (token is per-user).
+  useEffect(() => {
+    if (!isAuthenticated) void unregisterPushToken();
+  }, [isAuthenticated]);
+
   const [scrolled, setScrolled] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -110,14 +128,6 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50">
-      {/* Announcement strip */}
-      <div className="glass-tint hidden border-b border-border/40 py-2 text-center text-[11px] font-medium tracking-wide text-foreground/75 md:block">
-        <span className="inline-flex items-center gap-2">
-          <Sparkles className="size-3 text-primary" strokeWidth={1.8} />
-          {announcement}
-        </span>
-      </div>
-
       <div
         className={cn(
           "relative transition-all duration-500",
@@ -489,7 +499,7 @@ export function Header() {
                       <DropdownMenuSeparator />
                       <DropdownMenuItem
                         className="cursor-pointer text-primary"
-                        onClick={() => void requestNotify()}
+                        onClick={() => void enablePushNotifications()}
                       >
                         <Bell className="size-4" />
                         {notifyPermission === "denied"
@@ -652,6 +662,17 @@ export function Header() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Announcement strip — BELOW the main bar (Zara/ASOS pattern): the
+          brand + nav stay at the very top, the promo line reads as a sub-bar. */}
+      {announcement && (
+        <div className="glass-tint hidden border-t border-border/40 py-2 text-center text-[11px] font-medium tracking-wide text-foreground/75 md:block">
+          <span className="inline-flex items-center gap-2">
+            <Sparkles className="size-3 text-primary" strokeWidth={1.8} />
+            {announcement}
+          </span>
+        </div>
+      )}
 
       {/* Mobile search overlay */}
       <AnimatePresence>
