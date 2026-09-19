@@ -7,6 +7,7 @@ import type { Doc } from "@/convex/_generated/dataModel";
 import { useShop } from "@/context/app-context";
 import { printInvoice } from "@/lib/invoice";
 import { cn, formatDateTime } from "@/lib/utils";
+import { useOrderStatusAlerts } from "@/hooks/use-notifications";
 import { useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, FileText, Loader2, Package, Truck } from "lucide-react";
@@ -30,6 +31,9 @@ export default function Orders() {
   const orders = useQuery(api.orders.myOrders);
   const [open, setOpen] = useState<string | null>(null);
 
+  // Phase 2: live status-change alerts (toast + browser notification + chime)
+  // while this page is open — fixes the stale Orders page gap.
+  useOrderStatusAlerts(true);
   if (orders === undefined) {
     return (
       <div className="grid min-h-[60vh] place-items-center">

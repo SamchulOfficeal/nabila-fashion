@@ -21,11 +21,13 @@ import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
-import { cn } from "@/lib/utils";
+import { useMyOrderUpdates } from "@/hooks/use-notifications";
+import { cn, formatDateTime } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 import { useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  Bell,
   ChevronDown,
   Heart,
   LayoutDashboard,
@@ -70,6 +72,10 @@ export function Header() {
   const categories = useQuery(api.catalog.categories);
   const setCartOpen = useUiStore((state) => state.setCartOpen);
   const navigate = useNavigate();
+
+  // Phase 2: customer order notifications (real-time, own rows only).
+  const { items: myNotifications, unreadCount: myUnread, markAllRead: markMyRead } =
+    useMyOrderUpdates(isAuthenticated);
 
   const [scrolled, setScrolled] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
@@ -414,6 +420,63 @@ export function Header() {
                 )}
               </Link>
             </Button>
+
+            {/* Customer order-notifications bell — only for signed-in users. */}
+            {isAuthenticated && myNotifications.length > 0 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Order notifications"
+                    className="relative cursor-pointer"
+                  >
+                    <Bell className="size-5" strokeWidth={1.6} />
+                    {myUnread > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+                        {myUnread}
+                      </span>
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
+                  <DropdownMenuLabel className="flex items-center justify-between">
+                    Order updates
+                    <button
+                      type="button"
+                      onClick={() => void markMyRead()}
+                      className="cursor-pointer text-[11px] font-normal text-primary hover:underline"
+                    >
+                      Mark all read
+                    </button>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {myNotifications.slice(0, 8).map((item) => (
+                    <DropdownMenuItem
+                      key={item._id}
+                      className="flex cursor-pointer flex-col items-start gap-1 py-2.5"
+                      onClick={() => navigate("/orders")}
+                    >
+                      <span className="flex w-full items-center gap-2">
+                        <span
+                          className={cn(
+                            "size-1.5 shrink-0 rounded-full",
+                            item.isRead ? "bg-muted-foreground/40" : "bg-primary",
+                          )}
+                        />
+                        <span className="text-xs font-medium">{item.title}</span>
+                      </span>
+                      <span className="pl-3.5 text-[11px] leading-4 text-muted-foreground">
+                        {item.message}
+                      </span>
+                      <span className="pl-3.5 text-[10px] text-muted-foreground/70">
+                        {formatDateTime(item.createdAt)}
+                      </span>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
             <DropdownMenu>
               <DropdownMenuTrigger asChild>

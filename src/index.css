@@ -24,6 +24,10 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -65,6 +69,10 @@
   --accent: #f7eef3;
   --accent-foreground: #241a22;
   --destructive: #d92d20;
+  --success: #1a7f4b;
+  --success-foreground: #ffffff;
+  --warning: #b45309;
+  --warning-foreground: #ffffff;
 
   --border: rgba(36, 26, 34, 0.1);
   --input: rgba(36, 26, 34, 0.14);
@@ -116,6 +124,10 @@
   --accent: rgba(255, 255, 255, 0.09);
   --accent-foreground: #f7f2f6;
   --destructive: #f0736a;
+  --success: #4ade80;
+  --success-foreground: #0b2317;
+  --warning: #fbbf24;
+  --warning-foreground: #241503;
 
   --border: rgba(255, 255, 255, 0.12);
   --input: rgba(255, 255, 255, 0.16);
@@ -279,6 +291,21 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+  /* Champagne gold accents for luxury highlights (borders, badges, dividers). */
+  .gold-accent {
+    color: var(--brand-champagne);
+  }
+  .gold-hairline {
+    border-color: color-mix(in srgb, var(--brand-champagne) 55%, transparent);
+  }
+  .gold-gradient {
+    background-image: linear-gradient(
+      120deg,
+      rgba(200, 164, 106, 0.35),
+      rgba(200, 164, 106, 0.08) 45%,
+      rgba(200, 164, 106, 0.3)
+    );
   }
   .no-scrollbar::-webkit-scrollbar {
     display: none;

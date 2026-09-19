@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { motion } from "framer-motion";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -23,14 +24,19 @@ export function EmptyState({
   className,
 }: EmptyStateProps) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       className={cn(
         "glass flex flex-col items-center gap-4 rounded-3xl px-6 py-16 text-center",
         className,
       )}
     >
-      <span className="grid size-16 place-items-center rounded-2xl bg-brand-blush text-primary">
+      <span className="relative grid size-16 place-items-center rounded-2xl bg-brand-blush text-primary">
         <Icon className="size-7" strokeWidth={1.5} />
+        <span className="absolute inset-0 -z-10 rounded-2xl bg-primary/15 blur-lg" />
       </span>
       <div className="space-y-1.5">
         <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
@@ -49,6 +55,6 @@ export function EmptyState({
           {actionLabel}
         </Button>
       )}
-    </div>
+    </motion.div>
   );
 }

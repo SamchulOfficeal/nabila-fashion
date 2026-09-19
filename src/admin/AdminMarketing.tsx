@@ -14,12 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { api } from "@/services/firebase/api";
+import { uploadProductImage } from "@/services/firebase/products";
 import type { Doc } from "@/convex/_generated/dataModel";
 import { useShop } from "@/context/app-context";
 import { formatDate } from "@/lib/utils";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
-import { Flame, Layers, Loader2, Plus, Pencil, Tag, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Flame, Layers, Loader2, Megaphone, Plus, Pencil, Tag, Trash2 } from "lucide-react";
+import { useRef, useState } from "react";
 import { toast } from "sonner";
 
 const EMPTY_BANNER = {
@@ -43,23 +44,50 @@ const EMPTY_COUPON = {
   usageLimit: "",
 };
 
+const EMPTY_POPUP = {
+  title: "",
+  description: "",
+  image: "",
+  ctaText: "",
+  ctaUrl: "",
+  frequency: "once" as "once" | "daily" | "always",
+  startAt: "",
+  endAt: "",
+  isActive: true,
+};
+
+const toDatetimeLocal = (timestamp?: number) => {
+  if (!timestamp) return "";
+  const date = new Date(timestamp);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
+
 export function AdminMarketing() {
   const { money } = useShop();
   const banners = useQuery(api.banners.staffList);
   const coupons = useQuery(api.coupons.staffList);
   const flash = useQuery(api.catalog.flashSales);
+  const popups = useQuery(api.popups.staffList);
   const upsertBanner = useMutation(api.banners.upsert);
   const removeBanner = useMutation(api.banners.remove);
   const createCoupon = useMutation(api.coupons.create);
   const setCouponActive = useMutation(api.coupons.setActive);
   const removeCoupon = useMutation(api.coupons.remove);
+  const upsertPopup = useMutation(api.popups.upsert);
+  const removePopup = useMutation(api.popups.remove);
 
   const [bannerOpen, setBannerOpen] = useState(false);
   const [editingBanner, setEditingBanner] = useState<Doc<"banners"> | null>(null);
   const [bannerForm, setBannerForm] = useState(EMPTY_BANNER);
   const [couponOpen, setCouponOpen] = useState(false);
   const [couponForm, setCouponForm] = useState(EMPTY_COUPON);
+  const [popupOpen, setPopupOpen] = useState(false);
+  const [editingPopup, setEditingPopup] = useState<Doc<"popups"> | null>(null);
+  const [popupForm, setPopupForm] = useState(EMPTY_POPUP);
   const [busy, setBusy] = useState(false);
+  const [popupUploading, setPopupUploading] = useState(false);
+  const popupFileRef = useRef<HTMLInputElement>(null);
 
   const openBanner = (banner?: Doc<"banners">) => {
     setEditingBanner(banner ?? null);
@@ -123,6 +151,74 @@ export function AdminMarketing() {
       setCouponForm(EMPTY_COUPON);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create coupon");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openPopup = (popup?: Doc<"popups">) => {
+    setEditingPopup(popup ?? null);
+    setPopupForm(
+      popup
+        ? {
+            title: popup.title,
+            description: popup.description ?? "",
+            image: popup.image,
+            ctaText: popup.ctaText ?? "",
+            ctaUrl: popup.ctaUrl ?? "",
+            frequency: popup.frequency,
+            startAt: toDatetimeLocal(popup.startAt),
+            endAt: toDatetimeLocal(popup.endAt),
+            isActive: popup.isActive,
+          }
+        : EMPTY_POPUP,
+    );
+    setPopupOpen(true);
+  };
+
+  const uploadPopupImage = async (file: File) => {
+    setPopupUploading(true);
+    try {
+      const url = await uploadProductImage(file, `popups/${crypto.randomUUID()}`);
+      setPopupForm((current) => ({ ...current, image: url }));
+      toast.success("Image uploaded");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not upload image");
+    } finally {
+      setPopupUploading(false);
+    }
+  };
+
+  const savePopup = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const startAt = popupForm.startAt ? new Date(popupForm.startAt).getTime() : NaN;
+    if (!Number.isFinite(startAt)) {
+      toast.error("Choose a start date for the popup.");
+      return;
+    }
+    const endAt = popupForm.endAt ? new Date(popupForm.endAt).getTime() : undefined;
+    if (endAt !== undefined && endAt <= startAt) {
+      toast.error("The end date must be after the start date.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await upsertPopup({
+        id: editingPopup?._id,
+        title: popupForm.title,
+        description: popupForm.description || undefined,
+        image: popupForm.image,
+        ctaText: popupForm.ctaText || undefined,
+        ctaUrl: popupForm.ctaUrl || undefined,
+        frequency: popupForm.frequency,
+        startAt,
+        endAt,
+        isActive: popupForm.isActive,
+      });
+      toast.success(editingPopup ? "Popup updated" : "Popup created");
+      setPopupOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save popup");
     } finally {
       setBusy(false);
     }
@@ -252,6 +348,106 @@ export function AdminMarketing() {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      </section>
+
+      {/* popup ad */}
+      <section className="glass rounded-3xl p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-2">
+            <Megaphone className="size-4 text-primary" strokeWidth={1.8} />
+            <h2 className="font-display text-lg font-semibold tracking-tight">Popup ad</h2>
+          </div>
+          <Button
+            onClick={() => openPopup()}
+            className="cursor-pointer rounded-full"
+            size="sm"
+          >
+            <Plus className="size-4" strokeWidth={2} /> New popup
+          </Button>
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          The newest active popup is shown once per visit on the storefront, gated by its frequency setting.
+        </p>
+
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {popups === undefined ? (
+            <Loader2 className="size-5 animate-spin text-muted-foreground" />
+          ) : popups.length === 0 ? (
+            <p className="text-xs text-muted-foreground">No popups yet.</p>
+          ) : (
+            popups.map((popup) => {
+              const now = Date.now();
+              const live =
+                popup.isActive &&
+                popup.startAt <= now &&
+                (!popup.endAt || popup.endAt > now);
+              return (
+                <div key={popup._id} className="glass-soft flex gap-3 rounded-2xl p-3">
+                  <SmartImage
+                    src={popup.image}
+                    alt={popup.title}
+                    width={320}
+                    className="h-24 w-32 shrink-0 rounded-xl"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="line-clamp-1 text-sm font-medium">{popup.title}</p>
+                      {live ? (
+                        <Badge className="rounded-full bg-primary/12 text-[10px] font-semibold text-primary uppercase">
+                          Live
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="rounded-full text-[10px] uppercase">
+                          {popup.isActive ? "Scheduled" : "Inactive"}
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      {popup.frequency} · {formatDate(popup.startAt)}
+                      {popup.endAt ? ` → ${formatDate(popup.endAt)}` : ""}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                      <Switch
+                        checked={popup.isActive}
+                        onCheckedChange={(checked) =>
+                          void upsertPopup({
+                            id: popup._id,
+                            title: popup.title,
+                            description: popup.description,
+                            image: popup.image,
+                            ctaText: popup.ctaText,
+                            ctaUrl: popup.ctaUrl,
+                            frequency: popup.frequency,
+                            startAt: popup.startAt,
+                            endAt: popup.endAt,
+                            isActive: checked,
+                          })
+                        }
+                        aria-label="Popup active"
+                      />
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => openPopup(popup)}
+                        className="cursor-pointer rounded-full text-xs"
+                      >
+                        <Pencil className="size-3.5" /> Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => void removePopup({ id: popup._id })}
+                        className="cursor-pointer rounded-full text-xs text-destructive"
+                      >
+                        <Trash2 className="size-3.5" /> Remove
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
           )}
         </div>
       </section>
@@ -575,6 +771,175 @@ export function AdminMarketing() {
               <Button type="submit" disabled={busy} className="cursor-pointer rounded-full">
                 {busy && <Loader2 className="size-4 animate-spin" />}
                 Create coupon
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* popup dialog */}
+      <Dialog open={popupOpen} onOpenChange={setPopupOpen}>
+        <DialogContent className="glass-strong max-h-[88vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="font-display">
+              {editingPopup ? "Edit popup" : "New popup"}
+            </DialogTitle>
+            <DialogDescription>
+              Shown on the storefront while active, gated by the frequency you choose.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={savePopup} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="p-title">Title</Label>
+              <Input
+                id="p-title"
+                required
+                value={popupForm.title}
+                onChange={(event) =>
+                  setPopupForm((current) => ({ ...current, title: event.target.value }))
+                }
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="p-desc">Description</Label>
+              <Input
+                id="p-desc"
+                value={popupForm.description}
+                onChange={(event) =>
+                  setPopupForm((current) => ({ ...current, description: event.target.value }))
+                }
+                className="h-11 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="p-image">Image URL</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="p-image"
+                  required
+                  value={popupForm.image}
+                  onChange={(event) =>
+                    setPopupForm((current) => ({ ...current, image: event.target.value }))
+                  }
+                  className="h-11 rounded-xl"
+                />
+                <input
+                  ref={popupFileRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void uploadPopupImage(file);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={popupUploading}
+                  onClick={() => popupFileRef.current?.click()}
+                  className="h-11 shrink-0 cursor-pointer rounded-xl"
+                >
+                  {popupUploading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    "Upload"
+                  )}
+                </Button>
+              </div>
+              {popupForm.image ? (
+                <SmartImage
+                  src={popupForm.image}
+                  alt="Popup preview"
+                  width={480}
+                  className="mt-2 aspect-[4/3] w-full rounded-2xl"
+                />
+              ) : null}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="p-cta">CTA text</Label>
+                <Input
+                  id="p-cta"
+                  value={popupForm.ctaText}
+                  onChange={(event) =>
+                    setPopupForm((current) => ({ ...current, ctaText: event.target.value }))
+                  }
+                  placeholder="Shop the sale"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="p-url">CTA link</Label>
+                <Input
+                  id="p-url"
+                  value={popupForm.ctaUrl}
+                  onChange={(event) =>
+                    setPopupForm((current) => ({ ...current, ctaUrl: event.target.value }))
+                  }
+                  placeholder="/shop"
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="p-frequency">Frequency</Label>
+                <select
+                  id="p-frequency"
+                  value={popupForm.frequency}
+                  onChange={(event) =>
+                    setPopupForm((current) => ({
+                      ...current,
+                      frequency: event.target.value as "once" | "daily" | "always",
+                    }))
+                  }
+                  className="h-11 w-full rounded-xl border border-border/60 bg-card/70 px-3 text-sm"
+                >
+                  <option value="once">Once (until dismissed)</option>
+                  <option value="daily">Once per day</option>
+                  <option value="always">Every visit</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="p-start">Starts</Label>
+                <Input
+                  id="p-start"
+                  type="datetime-local"
+                  required
+                  value={popupForm.startAt}
+                  onChange={(event) =>
+                    setPopupForm((current) => ({ ...current, startAt: event.target.value }))
+                  }
+                  className="h-11 rounded-xl"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="p-end">Ends (optional)</Label>
+                <Input
+                  id="p-end"
+                  type="datetime-local"
+                  value={popupForm.endAt}
+                  onChange={(event) =>
+                    setPopupForm((current) => ({ ...current, endAt: event.target.value }))
+                  }
+                  className="h-11 rounded-xl"
+                />
+              </div>
+            </div>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch
+                checked={popupForm.isActive}
+                onCheckedChange={(checked) =>
+                  setPopupForm((current) => ({ ...current, isActive: checked }))
+                }
+              />
+              Active on storefront
+            </label>
+            <DialogFooter>
+              <Button type="submit" disabled={busy} className="cursor-pointer rounded-full">
+                {busy && <Loader2 className="size-4 animate-spin" />}
+                {editingPopup ? "Save popup" : "Create popup"}
               </Button>
             </DialogFooter>
           </form>

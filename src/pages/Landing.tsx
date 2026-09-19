@@ -7,7 +7,7 @@ import { api } from "@/services/firebase/api";
 import { useShop } from "@/context/app-context";
 import { cn, discountPercent } from "@/lib/utils";
 import { useQuery } from "@/services/firebase/hooks";
-import { AnimatePresence, motion } from "framer-motion";
+import { animate, AnimatePresence, motion, useInView } from "framer-motion";
 import {
   ArrowRight,
   BadgeCheck,
@@ -20,7 +20,7 @@ import {
   Star,
   Truck,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 const PROMISES = [
@@ -226,9 +226,9 @@ export default function Landing() {
             {/* floating stat chips */}
             <div className="absolute right-6 bottom-6 z-10 hidden gap-3 lg:flex">
               {[
-                { value: "12k+", label: "Happy customers" },
-                { value: "64", label: "Districts served" },
-                { value: "4.8★", label: "Average rating" },
+                { value: 12, suffix: "k+", decimals: 0, label: "Happy customers" },
+                { value: 64, suffix: "", decimals: 0, label: "Districts served" },
+                { value: 4.8, suffix: "★", decimals: 1, label: "Average rating" },
               ].map((stat, index) => (
                 <motion.div
                   key={stat.label}
@@ -237,7 +237,9 @@ export default function Landing() {
                   transition={{ delay: 0.5 + index * 0.12, duration: 0.6 }}
                   className="glass-strong rounded-2xl px-4 py-3 text-center"
                 >
-                  <p className="font-display text-lg font-semibold">{stat.value}</p>
+                  <p className="font-display text-lg font-semibold">
+                    <CountUp value={stat.value} suffix={stat.suffix} decimals={stat.decimals} />
+                  </p>
                   <p className="text-[10px] tracking-wide text-muted-foreground uppercase">
                     {stat.label}
                   </p>
@@ -264,7 +266,7 @@ export default function Landing() {
       </section>
 
       {/* --------------------------------------------------------- categories */}
-      <section className="pt-20">
+      <section className="pt-16 md:pt-24 lg:pt-32">
         <SectionHeading
           eyebrow={t("section.categoriesHint")}
           title={t("section.categories")}
@@ -322,7 +324,7 @@ export default function Landing() {
 
       {/* -------------------------------------------------------- flash sale */}
       {topFlash.length > 0 && (
-        <section className="pt-20">
+        <section className="pt-16 md:pt-24 lg:pt-32">
           <div className="glass overflow-hidden rounded-[2rem] p-4 sm:p-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -407,7 +409,7 @@ export default function Landing() {
       )}
 
       {/* ---------------------------------------------------------- featured */}
-      <section className="pt-20">
+      <section className="pt-16 md:pt-24 lg:pt-32">
         <SectionHeading
           eyebrow={t("section.featuredHint")}
           title={t("section.featured")}
@@ -431,7 +433,7 @@ export default function Landing() {
       </section>
 
       {/* ---------------------------------------------------------- promises */}
-      <section className="pt-20">
+      <section className="pt-16 md:pt-24 lg:pt-32">
         <div className="glass rounded-[2rem] p-6 sm:p-10">
           <SectionHeading
             eyebrow="Why shop with us"
@@ -464,7 +466,7 @@ export default function Landing() {
       </section>
 
       {/* ------------------------------------------------------ new arrivals */}
-      <section className="pt-20">
+      <section className="pt-16 md:pt-24 lg:pt-32">
         <SectionHeading eyebrow={t("section.newInHint")} title={t("section.newIn")} />
         <div className="mt-7 grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {(newest ?? []).map((product, index) => (
@@ -474,7 +476,7 @@ export default function Landing() {
       </section>
 
       {/* ------------------------------------------------------ testimonials */}
-      <section className="pt-20">
+      <section className="pt-16 md:pt-24 lg:pt-32">
         <SectionHeading
           eyebrow="Real reviews from verified buyers"
           title={t("section.reviews")}
@@ -524,7 +526,7 @@ export default function Landing() {
       </section>
 
       {/* ------------------------------------------------------------- CTA */}
-      <section className="pt-20">
+      <section className="pt-16 md:pt-24 lg:pt-32">
         <div className="glass relative overflow-hidden rounded-[2rem] p-8 sm:p-12">
           <div className="pointer-events-none absolute -top-24 -right-16 size-72 rounded-full bg-primary/20 blur-3xl animate-float-slow" />
           <div className="relative grid items-center gap-8 lg:grid-cols-[1.4fr_1fr]">
@@ -576,6 +578,38 @@ export default function Landing() {
         </div>
       </section>
     </div>
+  );
+}
+
+function CountUp({
+  value,
+  suffix = "",
+  decimals = 0,
+}: {
+  value: number;
+  suffix?: string;
+  decimals?: number;
+}) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-40px" });
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    const controls = animate(0, value, {
+      duration: 1.4,
+      ease: [0.22, 1, 0.36, 1],
+      onUpdate: (latest) =>
+        setDisplay(Math.round(latest * 10 ** decimals) / 10 ** decimals),
+    });
+    return () => controls.stop();
+  }, [inView, value, decimals]);
+
+  return (
+    <span ref={ref} className="tabular-nums">
+      {display.toFixed(decimals)}
+      {suffix}
+    </span>
   );
 }
 

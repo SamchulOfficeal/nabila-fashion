@@ -213,6 +213,25 @@ const schema = defineSchema(
       isActive: v.boolean(),
     }).index("isActive", ["isActive"]),
 
+    // Phase 3: admin-controlled popup ad. One campaign is shown at a time;
+    // frequency gates how often a visitor sees it (see components/PopupAd.tsx).
+    popups: defineTable({
+      title: v.string(),
+      description: v.optional(v.string()),
+      image: v.string(),
+      ctaText: v.optional(v.string()),
+      ctaUrl: v.optional(v.string()),
+      frequency: v.union(
+        v.literal("once"),
+        v.literal("daily"),
+        v.literal("always"),
+      ),
+      startAt: v.number(),
+      endAt: v.optional(v.number()),
+      isActive: v.boolean(),
+      createdAt: v.number(),
+    }).index("isActive", ["isActive"]),
+
     legalPages: defineTable({
       slug: v.string(),
       title: v.string(),
