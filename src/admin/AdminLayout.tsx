@@ -18,8 +18,9 @@ import {
 import { api } from "@/services/firebase/api";
 import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
+import { useStaffNotifications } from "@/hooks/use-notifications";
 import { cn, formatDateTime } from "@/lib/utils";
-import { useMutation, useQuery } from "@/services/firebase/hooks";
+import { useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
 import {
   Bell,
@@ -53,9 +54,8 @@ export function AdminLayout() {
   const { t, storeName } = useShop();
   const brandInitial = storeName.charAt(0).toUpperCase();
   const profile = useQuery(api.profile.get);
-  const notifications = useQuery(api.notifications.staffRecent, { limit: 8 });
-  const unread = useQuery(api.notifications.unreadCount);
-  const markAllRead = useMutation(api.notifications.markAllRead);
+  // Phase 2: real-time bell via Firestore onSnapshot (replaces polling).
+  const { items: notifications, unreadCount: unread, markAllRead } = useStaffNotifications();
   const { signOut } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -182,19 +182,19 @@ export function AdminLayout() {
                   Notifications
                   <button
                     type="button"
-                    onClick={() => void markAllRead({})}
+                    onClick={() => void markAllRead()}
                     className="cursor-pointer text-[11px] font-normal text-primary hover:underline"
                   >
                     Mark all read
                   </button>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {(notifications ?? []).length === 0 ? (
+                {notifications.length === 0 ? (
                   <p className="px-2 py-4 text-xs text-muted-foreground">
                     No alerts yet. New orders appear here instantly.
                   </p>
                 ) : (
-                  (notifications ?? []).map((item) => (
+                  notifications.map((item) => (
                     <DropdownMenuItem
                       key={item._id}
                       className="flex cursor-pointer flex-col items-start gap-1 py-2.5"

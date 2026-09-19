@@ -7,10 +7,13 @@ import { api } from "@/services/firebase/api";
 import { BD_DIVISIONS } from "@/convex/lib/delivery";
 import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
-import { formatDate } from "@/lib/utils";
+import { formatDate, cn } from "@/lib/utils";
+import { useBrowserNotifications } from "@/hooks/use-notifications";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
 import {
   BadgeCheck,
+  Bell,
+  BellOff,
   Copy,
   Heart,
   LayoutDashboard,
@@ -444,6 +447,8 @@ export default function Account() {
             </div>
           )}
 
+          <BrowserNotificationCard />
+
           <div className="glass rounded-3xl p-5">
             <div className="flex items-center gap-2">
               <Shield className="size-4 text-primary" strokeWidth={1.8} />
@@ -460,6 +465,91 @@ export default function Account() {
 
         </div>
       </section>
+    </div>
+  );
+}
+
+/**
+ * Phase 2: browser Notification permission controls for order updates.
+ * Tier 1 only — the standard Notification API, no FCM/service worker.
+ */
+function BrowserNotificationCard() {
+  const { permission, request, test } = useBrowserNotifications();
+  const [busy, setBusy] = useState(false);
+
+  const statusLabel =
+    permission === "granted"
+      ? "Enabled — you will be alerted on this device"
+      : permission === "denied"
+        ? "Blocked — re-enable from your browser site settings"
+        : permission === "unsupported"
+          ? "Not supported on this browser"
+          : "Off — tap enable to receive order updates";
+
+  const handleEnable = async () => {
+    setBusy(true);
+    try {
+      const result = await request();
+      if (result === "granted") {
+        toast.success("Order notifications enabled");
+        test();
+      } else if (result === "denied") {
+        toast.error("Permission denied — allow notifications in browser settings");
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="glass rounded-3xl p-5">
+      <div className="flex items-center gap-2">
+        {permission === "granted" ? (
+          <Bell className="size-4 text-primary" strokeWidth={1.8} />
+        ) : (
+          <BellOff className="size-4 text-muted-foreground" strokeWidth={1.8} />
+        )}
+        <h2 className="font-display text-base font-semibold tracking-tight">
+          Order notifications
+        </h2>
+      </div>
+      <p className="mt-3 text-xs leading-5 text-muted-foreground">
+        Get an alert on this device the moment your order status changes — no need
+        to keep the orders page open.
+      </p>
+      <p
+        className={cn(
+          "mt-2 text-xs font-medium",
+          permission === "granted" ? "text-emerald-600" : "text-muted-foreground",
+        )}
+      >
+        Status: {statusLabel}
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {permission !== "granted" && permission !== "unsupported" && (
+          <Button
+            size="sm"
+            disabled={busy}
+            onClick={() => void handleEnable()}
+            className="cursor-pointer rounded-full"
+          >
+            {busy && <Loader2 className="size-4 animate-spin" />}
+            <Bell className="size-4" strokeWidth={1.8} />
+            Enable notifications
+          </Button>
+        )}
+        {permission === "granted" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={test}
+            className="cursor-pointer rounded-full"
+          >
+            <Bell className="size-4" strokeWidth={1.8} />
+            Send test notification
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

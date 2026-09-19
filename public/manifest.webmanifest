@@ -11,10 +11,16 @@
   "categories": ["shopping", "lifestyle"],
   "icons": [
     {
-      "src": "/logo.svg",
+      "src": "/auravelle-mark.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/auravelle-mark.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ]
 }

@@ -10,7 +10,8 @@ import { useShop } from "@/context/app-context";
 import { useCart } from "@/hooks/use-cart";
 import { cn } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
-import { Loader2, Minus, Plus, ShoppingBag, Trash2, Truck } from "lucide-react";
+import { motion } from "framer-motion";
+import { Loader2, Minus, Plus, ShoppingBag, Sparkles, Trash2, Truck } from "lucide-react";
 import { useNavigate } from "react-router";
 
 export function CartDrawer() {
@@ -27,7 +28,7 @@ export function CartDrawer() {
     <Sheet open={cartOpen} onOpenChange={setCartOpen}>
       <SheetContent
         side="right"
-        className="glass-strong flex w-full flex-col gap-0 border-l border-border/40 sm:max-w-md"
+        className="glass-strong flex w-full flex-col gap-0 border-l border-border/40 ease-[cubic-bezier(0.22,1,0.36,1)] sm:max-w-md"
       >
         <SheetHeader className="border-b border-border/40 pb-4">
           <SheetTitle className="flex items-center gap-2 font-display text-lg">
@@ -42,14 +43,24 @@ export function CartDrawer() {
             <Loader2 className="size-5 animate-spin text-muted-foreground" />
           </div>
         ) : items.length === 0 ? (
-          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center">
-            <span className="grid size-16 place-items-center rounded-2xl bg-brand-blush text-primary">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="flex flex-1 flex-col items-center justify-center gap-4 px-6 text-center"
+          >
+            <span className="relative grid size-16 place-items-center rounded-2xl bg-brand-blush text-primary">
               <ShoppingBag className="size-7" strokeWidth={1.5} />
+              <span className="absolute inset-0 -z-10 rounded-2xl bg-primary/15 blur-lg" />
             </span>
             <div>
               <p className="font-display text-lg font-semibold">{t("bag.empty")}</p>
               <p className="mt-1 text-sm text-muted-foreground">{t("bag.emptyHint")}</p>
             </div>
+            <p className="flex items-center gap-1.5 text-[11px] tracking-[0.14em] text-muted-foreground/80 uppercase">
+              <Sparkles className="size-3 text-brand-champagne" strokeWidth={1.8} />
+              New pieces every week
+            </p>
             <Button
               className="cursor-pointer rounded-full px-6"
               onClick={() => {
@@ -59,7 +70,7 @@ export function CartDrawer() {
             >
               {t("cta.shopNow")}
             </Button>
-          </div>
+          </motion.div>
         ) : (
           <>
             <div className="border-b border-border/40 px-4 py-3">
@@ -78,7 +89,7 @@ export function CartDrawer() {
               <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
                   className={cn(
-                    "h-full rounded-full bg-gradient-to-r from-primary to-brand-champagne transition-all duration-700",
+                    "h-full rounded-full bg-gradient-to-r from-primary via-primary to-brand-champagne transition-all duration-700",
                   )}
                   style={{ width: `${progress}%` }}
                 />
