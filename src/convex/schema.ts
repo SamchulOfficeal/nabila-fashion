@@ -239,6 +239,24 @@ const schema = defineSchema(
       updatedAt: v.number(),
     }).index("slug", ["slug"]),
 
+    // Store credit: customers top up a wallet balance, then pay orders with it.
+    // Every mutation of the balance leaves an immutable ledger row.
+    balanceTopups: defineTable({
+      userId: v.string(),
+      amount: v.number(),
+      method: v.string(), // bkash | nagad | bank — the channel the customer paid through
+      reference: v.string(), // txn id / sender number supplied by the customer
+      status: v.union(
+        v.literal("pending"),
+        v.literal("approved"),
+        v.literal("rejected"),
+      ),
+      note: v.optional(v.string()),
+      reviewedBy: v.optional(v.string()),
+      reviewedAt: v.optional(v.number()),
+      createdAt: v.number(),
+    }).index("userId", ["userId"]),
+
     notifications: defineTable({
       type: v.union(
         v.literal("order"),

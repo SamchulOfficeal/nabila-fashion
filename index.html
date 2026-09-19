@@ -27,6 +27,20 @@
 
 <body>
   <div id="root"></div>
+  <!-- Paint the brand colour instantly (no white flash before JS boots) and
+       apply the saved theme before first paint to avoid dark-mode flicker. -->
+  <script>
+    (function () {
+      try {
+        var theme = localStorage.getItem("nabila:theme");
+        if (!theme) {
+          theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        }
+        if (theme === "dark") document.documentElement.classList.add("dark");
+        document.documentElement.style.colorScheme = theme;
+      } catch (e) {}
+    })();
+  </script>
   <script type="module" src="/src/main.tsx"></script>
 </body>
 

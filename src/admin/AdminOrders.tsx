@@ -10,7 +10,7 @@ import { useShop } from "@/context/app-context";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
-import { ChevronDown, Loader2, Phone, Search } from "lucide-react";
+import { BadgeCheck, ChevronDown, Loader2, Phone, Search, Wallet, XCircle } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -45,6 +45,8 @@ export function AdminOrders() {
   });
   const updateStatus = useMutation(api.orders.updateStatus);
   const setCourierInfo = useMutation(api.orders.setCourierInfo);
+  const topups = useQuery(api.balance.staffList);
+  const reviewTopup = useMutation(api.balance.reviewTopup);
   const [consignmentDraft, setConsignmentDraft] = useState<Record<string, string>>({});
   const [savingConsignment, setSavingConsignment] = useState<string | null>(null);
 
@@ -389,6 +391,92 @@ export function AdminOrders() {
           ))}
         </div>
       )}
+
+      {/* Balance top-up approvals: customer sent money → admin verifies → wallet credited. */}
+      <section className="glass mt-6 rounded-3xl p-5">
+        <div className="flex items-center gap-2">
+          <Wallet className="size-4 text-primary" strokeWidth={1.8} />
+          <h2 className="font-display text-lg font-semibold tracking-tight">
+            Balance top-ups
+          </h2>
+          {topups && (
+            <Badge variant="outline" className="rounded-full text-[10px]">
+              {topups.filter((row) => row.status === "pending").length} pending
+            </Badge>
+          )}
+        </div>
+        <p className="mt-1.5 text-xs text-muted-foreground">
+          Match each request against your bKash/Nagad statement, then approve to
+          credit the customer's store balance.
+        </p>
+        {topups === undefined ? (
+          <div className="grid place-items-center py-8">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+          </div>
+        ) : topups.length === 0 ? (
+          <p className="py-6 text-center text-xs text-muted-foreground">
+            No top-up requests yet.
+          </p>
+        ) : (
+          <ul className="mt-4 divide-y divide-border/50">
+            {topups.map((row) => (
+              <li key={row._id} className="flex flex-wrap items-center gap-3 py-3">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">
+                    {row.userName || "Customer"} · {money(row.amount)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {String(row.method).toUpperCase()} · ref {row.reference} · {formatDateTime(row.createdAt)}
+                  </p>
+                </div>
+                <span
+                  className={cn(
+                    "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase",
+                    row.status === "approved"
+                      ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300"
+                      : row.status === "rejected"
+                        ? "bg-destructive/15 text-destructive"
+                        : "bg-amber-500/15 text-amber-700 dark:text-amber-300",
+                  )}
+                >
+                  {row.status}
+                </span>
+                {row.status === "pending" && (
+                  <div className="flex gap-1.5">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        void reviewTopup({ topupId: row._id, decision: "approve" })
+                          .then(() => toast.success(`৳${row.amount.toLocaleString()} credited`))
+                          .catch((error: unknown) =>
+                            toast.error(error instanceof Error ? error.message : "Failed"),
+                          )
+                      }
+                      className="h-8 cursor-pointer rounded-full px-3 text-xs"
+                    >
+                      <BadgeCheck className="size-3.5" /> Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        void reviewTopup({ topupId: row._id, decision: "reject", note: "No matching payment found" })
+                          .then(() => toast.info("Top-up rejected"))
+                          .catch((error: unknown) =>
+                            toast.error(error instanceof Error ? error.message : "Failed"),
+                          )
+                      }
+                      className="h-8 cursor-pointer rounded-full px-3 text-xs"
+                    >
+                      <XCircle className="size-3.5" /> Reject
+                    </Button>
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }

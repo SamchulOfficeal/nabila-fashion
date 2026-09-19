@@ -27,6 +27,7 @@ import {
   Sparkles,
   TrendingUp,
   UserCog,
+  Wallet,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router";
@@ -51,6 +52,7 @@ export default function Account() {
   const profile = useQuery(api.profile.get);
   const saveProfile = useMutation(api.profile.save);
   const reseller = useQuery(api.admin.resellerSummary);
+  const wallet = useQuery(api.balance.myBalance);
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -238,6 +240,9 @@ export default function Account() {
           </Link>
         ))}
       </div>
+
+      {/* Store balance — top up once, then check out in one tap. */}
+      <StoreBalanceCard wallet={wallet} />
 
       {profile.role === "reseller" && reseller && (
         <section className="glass mt-6 rounded-3xl p-5 sm:p-6">
@@ -564,5 +569,152 @@ function BrowserNotificationCard() {
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * Store balance card: shows the current credit and lets the customer request a
+ * top-up (send money via bKash/Nagad, submit the txn id, admin approves →
+ * balance is credited). Reuses the withdrawal-review UX pattern.
+ */
+function StoreBalanceCard({
+  wallet,
+}: {
+  wallet?: { balance: number; topups: any[] };
+}) {
+  const { money } = useShop();
+  const requestTopup = useMutation(api.balance.requestTopup);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [amount, setAmount] = useState("1000");
+  const [method, setMethod] = useState("bkash");
+  const [reference, setReference] = useState("");
+
+  const balance = wallet?.balance ?? 0;
+  const topups = wallet?.topups ?? [];
+
+  const submitTopup = async () => {
+    setBusy(true);
+    try {
+      await requestTopup({ amount: Number(amount), method, reference: reference.trim() });
+      toast.success("Top-up request sent — we'll confirm it shortly.");
+      setOpen(false);
+      setReference("");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send the request");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <section className="glass mt-6 rounded-3xl p-5 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Wallet className="size-4 text-primary" strokeWidth={1.8} />
+          <h2 className="font-display text-lg font-semibold tracking-tight">
+            Store balance
+          </h2>
+        </div>
+        <p className="font-display text-2xl font-semibold text-primary">
+          {money(Math.max(0, balance))}
+        </p>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-muted-foreground">
+        Top up once via bKash/Nagad, then pay for orders in one tap at checkout.
+        Send money to the number our team confirms by phone, submit the transaction
+        ID, and the balance appears after a quick check.
+      </p>
+
+      {!open ? (
+        <Button
+          size="sm"
+          onClick={() => setOpen(true)}
+          className="mt-4 cursor-pointer rounded-full"
+        >
+          <Wallet className="size-4" strokeWidth={1.8} />
+          Request top-up
+        </Button>
+      ) : (
+        <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_1.4fr_auto]">
+          <div className="space-y-1.5">
+            <Label htmlFor="topupAmount">Amount (৳)</Label>
+            <Input
+              id="topupAmount"
+              inputMode="numeric"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value.replace(/[^0-9]/g, ""))}
+              className="h-10 rounded-xl"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="topupMethod">Paid via</Label>
+            <select
+              id="topupMethod"
+              value={method}
+              onChange={(event) => setMethod(event.target.value)}
+              className="h-10 w-full rounded-xl border border-input bg-card px-3 text-sm"
+            >
+              <option value="bkash">bKash</option>
+              <option value="nagad">Nagad</option>
+              <option value="bank">Bank</option>
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="topupRef">Transaction ID / sender number</Label>
+            <Input
+              id="topupRef"
+              value={reference}
+              onChange={(event) => setReference(event.target.value)}
+              placeholder="e.g. 9F7HK2LM35"
+              className="h-10 rounded-xl"
+            />
+          </div>
+          <div className="flex items-end gap-2">
+            <Button
+              size="sm"
+              disabled={busy || Number(amount) < 100 || reference.trim().length < 6}
+              onClick={() => void submitTopup()}
+              className="cursor-pointer rounded-full"
+            >
+              {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+              Submit
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setOpen(false)}
+              className="cursor-pointer rounded-full"
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {topups.length > 0 && (
+        <ul className="mt-4 space-y-1.5 border-t border-border/50 pt-3">
+          {topups.slice(0, 4).map((row) => (
+            <li key={row._id} className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                {formatDate(row.createdAt)} · {String(row.method).toUpperCase()} · {row.reference}
+              </span>
+              <span
+                className={cn(
+                  "font-semibold",
+                  row.status === "approved"
+                    ? "text-emerald-600"
+                    : row.status === "rejected"
+                      ? "text-destructive"
+                      : "text-amber-600",
+                )}
+              >
+                {money(row.amount)} · {row.status}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
