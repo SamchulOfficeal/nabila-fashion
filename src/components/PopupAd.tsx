@@ -11,7 +11,7 @@ import { api } from "@/services/firebase/api";
 import { useQuery } from "@/services/firebase/hooks";
 import { AnimatePresence, motion } from "framer-motion";
 import { Megaphone } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const seenKey = (id: string) => `popup:seen:${id}`;
@@ -49,17 +49,19 @@ function markSeen(id: string) {
 export function PopupAd() {
   const popup = useQuery<null | { _id: string; title: string; description?: string; image: string; ctaText?: string; ctaUrl?: string; frequency?: string }>(api.popups.active);
   const [open, setOpen] = useState(false);
-  const [checkedId, setCheckedId] = useState<string | null>(null);
+  // Ref (not state): a state guard made React StrictMode's double-invoked
+  // effect skip scheduling the open timer after cleanup cleared it, so the
+  // popup never appeared in the dev preview. With a ref the timer survives.
+  const scheduledFor = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!popup || checkedId === popup._id) return;
-    setCheckedId(popup._id);
+    if (!popup || scheduledFor.current === popup._id) return;
+    scheduledFor.current = popup._id;
     if (shouldShow(popup)) {
       // Small delay lets the page finish painting first.
-      const timer = window.setTimeout(() => setOpen(true), 900);
-      return () => window.clearTimeout(timer);
+      window.setTimeout(() => setOpen(true), 900);
     }
-  }, [popup, checkedId]);
+  }, [popup]);
 
   const dismiss = () => {
     if (popup) markSeen(popup._id);

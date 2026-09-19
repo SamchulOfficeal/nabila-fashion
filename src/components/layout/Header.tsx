@@ -21,7 +21,7 @@ import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
 import { useCart } from "@/hooks/use-cart";
 import { useWishlist } from "@/hooks/use-wishlist";
-import { useMyOrderUpdates } from "@/hooks/use-notifications";
+import { useBrowserNotifications, useMyOrderUpdates } from "@/hooks/use-notifications";
 import { cn, formatDateTime } from "@/lib/utils";
 import { useUiStore } from "@/store/ui-store";
 import { useQuery } from "@/services/firebase/hooks";
@@ -76,6 +76,7 @@ export function Header() {
   // Phase 2: customer order notifications (real-time, own rows only).
   const { items: myNotifications, unreadCount: myUnread, markAllRead: markMyRead } =
     useMyOrderUpdates(isAuthenticated);
+  const { permission: notifyPermission, request: requestNotify } = useBrowserNotifications();
 
   const [scrolled, setScrolled] = useState(false);
   const [megaOpen, setMegaOpen] = useState(false);
@@ -421,8 +422,9 @@ export function Header() {
               </Link>
             </Button>
 
-            {/* Customer order-notifications bell — only for signed-in users. */}
-            {isAuthenticated && myNotifications.length > 0 && (
+            {/* Customer order-notifications bell — always visible when signed in
+                so customers can find it (and grant browser permission) upfront. */}
+            {isAuthenticated && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -434,7 +436,7 @@ export function Header() {
                     <Bell className="size-5" strokeWidth={1.6} />
                     {myUnread > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-                        {myUnread}
+                        {myUnread > 9 ? "9+" : myUnread}
                       </span>
                     )}
                   </Button>
@@ -442,38 +444,60 @@ export function Header() {
                 <DropdownMenuContent align="end" className="w-80 max-w-[calc(100vw-2rem)]">
                   <DropdownMenuLabel className="flex items-center justify-between">
                     Order updates
-                    <button
-                      type="button"
-                      onClick={() => void markMyRead()}
-                      className="cursor-pointer text-[11px] font-normal text-primary hover:underline"
-                    >
-                      Mark all read
-                    </button>
+                    {myUnread > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => void markMyRead()}
+                        className="cursor-pointer text-[11px] font-normal text-primary hover:underline"
+                      >
+                        Mark all read
+                      </button>
+                    )}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {myNotifications.slice(0, 8).map((item) => (
-                    <DropdownMenuItem
-                      key={item._id}
-                      className="flex cursor-pointer flex-col items-start gap-1 py-2.5"
-                      onClick={() => navigate("/orders")}
-                    >
-                      <span className="flex w-full items-center gap-2">
-                        <span
-                          className={cn(
-                            "size-1.5 shrink-0 rounded-full",
-                            item.isRead ? "bg-muted-foreground/40" : "bg-primary",
-                          )}
-                        />
-                        <span className="text-xs font-medium">{item.title}</span>
-                      </span>
-                      <span className="pl-3.5 text-[11px] leading-4 text-muted-foreground">
-                        {item.message}
-                      </span>
-                      <span className="pl-3.5 text-[10px] text-muted-foreground/70">
-                        {formatDateTime(item.createdAt)}
-                      </span>
-                    </DropdownMenuItem>
-                  ))}
+                  {myNotifications.length === 0 ? (
+                    <p className="px-3 py-4 text-xs text-muted-foreground">
+                      No order updates yet. When an order's status changes, it appears here.
+                    </p>
+                  ) : (
+                    myNotifications.slice(0, 8).map((item) => (
+                      <DropdownMenuItem
+                        key={item._id}
+                        className="flex cursor-pointer flex-col items-start gap-1 py-2.5"
+                        onClick={() => navigate("/orders")}
+                      >
+                        <span className="flex w-full items-center gap-2">
+                          <span
+                            className={cn(
+                              "size-1.5 shrink-0 rounded-full",
+                              item.isRead ? "bg-muted-foreground/40" : "bg-primary",
+                            )}
+                          />
+                          <span className="text-xs font-medium">{item.title}</span>
+                        </span>
+                        <span className="pl-3.5 text-[11px] leading-4 text-muted-foreground">
+                          {item.message}
+                        </span>
+                        <span className="pl-3.5 text-[10px] text-muted-foreground/70">
+                          {formatDateTime(item.createdAt)}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                  {notifyPermission !== "granted" && notifyPermission !== "unsupported" && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="cursor-pointer text-primary"
+                        onClick={() => void requestNotify()}
+                      >
+                        <Bell className="size-4" />
+                        {notifyPermission === "denied"
+                          ? "Notifications blocked in browser settings"
+                          : "Enable phone/desktop notifications"}
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
