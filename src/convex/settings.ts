@@ -5,7 +5,7 @@ import { DEFAULT_USD_RATE, FREE_DELIVERY_THRESHOLD } from "./lib/delivery";
 
 export const DEFAULTS = {
   storeName: "NABILA FASHION",
-  logoUrl: "/logo.svg",
+  logoUrl: "/auravelle-mark.svg",
   usdRate: String(DEFAULT_USD_RATE),
   freeDeliveryThreshold: String(FREE_DELIVERY_THRESHOLD),
   supportPhone: "+8801700000000",

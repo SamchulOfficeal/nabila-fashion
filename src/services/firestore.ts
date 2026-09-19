@@ -68,7 +68,7 @@ export function subscribeNotifications(
 
 const DEFAULT_SETTINGS: AnyRecord = {
   storeName: "NABILA FASHION",
-  logoUrl: "/logo.svg",
+  logoUrl: "/auravelle-mark.svg",
   announcement: "Free delivery over ৳4,000",
   supportPhone: "+8801700000000",
   whatsappNumber: "+8801700000000",

@@ -1,8 +1,10 @@
 import { initializeApp } from "firebase/app";
 import {
+  browserLocalPersistence,
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
+  setPersistence,
   signInAnonymously,
   signInWithEmailAndPassword,
   signOut,
@@ -41,6 +43,9 @@ export const firebaseConfig = {
 
 export const firebaseApp = initializeApp(firebaseConfig);
 export const auth = getAuth(firebaseApp);
+// Survive refreshes/tabs: without this some environments default to session
+// (or in-memory) persistence and every reload signs the user out.
+void setPersistence(auth, browserLocalPersistence).catch(() => undefined);
 export const db = getFirestore(firebaseApp);
 export const storage = getStorage(firebaseApp);
 

@@ -123,15 +123,17 @@ export function useMyOrderUpdates(enabled: boolean) {
       if (!user) {
         if (active) setItems([]);
         return;
-      }
-      unsubSnapshot = subscribeNotifications("customer", (rows) => {
+      }      unsubSnapshot = subscribeNotifications("customer", (rows) => {
         if (!active) return;
         setItems(rows as NotificationRow[]);
         const fresh = rows.find(
           (row) => !row.isRead && !seen.current.has(row._id),
         );
         for (const row of rows) seen.current.add(row._id);
-        if (!firstPass.current && fresh && document.visibilityState === "visible") {
+        // firstPass: on the very first snapshot after sign-in, chime is
+        // skipped (browser autoplay policy) but a genuinely unread row that
+        // arrived before this session still deserves a toast once.
+        if (fresh && (document.visibilityState === "visible" || !firstPass.current)) {
           setLatestChange(fresh as NotificationRow);
         }
         firstPass.current = false;
