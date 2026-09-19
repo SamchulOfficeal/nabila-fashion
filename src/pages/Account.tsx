@@ -9,6 +9,7 @@ import { useShop } from "@/context/app-context";
 import { useAuth } from "@/hooks/use-auth";
 import { formatDate, cn } from "@/lib/utils";
 import { useBrowserNotifications } from "@/hooks/use-notifications";
+import { registerPushToken } from "@/lib/fcm";
 import { useMutation, useQuery } from "@/services/firebase/hooks";
 import {
   BadgeCheck,
@@ -475,6 +476,18 @@ export default function Account() {
  */
 function BrowserNotificationCard() {
   const { permission, request, test } = useBrowserNotifications();
+  const profile = useQuery(api.profile.get);
+
+  // Registering the FCM token turns on background push (site closed = still
+  // notified). Best-effort: local in-page alerts already work without it.
+  const enableWithPush = async (): Promise<NotificationPermission | "unsupported"> => {
+    const result = await request();
+    if (result === "granted") {
+      const isStaff = profile?.role === "admin" || profile?.role === "manager";
+      await registerPushToken(isStaff ? "staff" : "customer");
+    }
+    return result;
+  };
   const [busy, setBusy] = useState(false);
 
   const statusLabel =
@@ -489,9 +502,9 @@ function BrowserNotificationCard() {
   const handleEnable = async () => {
     setBusy(true);
     try {
-      const result = await request();
+      const result = await enableWithPush();
       if (result === "granted") {
-        toast.success("Order notifications enabled");
+        toast.success("Order notifications enabled — including background push");
         test();
       } else if (result === "denied") {
         toast.error("Permission denied — allow notifications in browser settings");

@@ -58,6 +58,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   const toggleTheme = useUiStore((state) => state.toggleTheme);
 
   const usdRate = config?.usdRate ?? 120;
+  const logoUrl = config?.logoUrl ?? "/auravelle-mark.svg";
 
   useEffect(() => {
     const root = document.documentElement;
@@ -68,6 +69,31 @@ export function ShopProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
+
+  /**
+   * Favicon follows the admin-configured logo: the store's mark shows up in
+   * browser tabs, bookmarks and phone home-screens without a redeploy.
+   * SVG/PNG/webp are fine inline; we only re-point the existing link tags.
+   */
+  useEffect(() => {
+    if (!logoUrl || logoUrl.startsWith("data:")) return;
+    const favicon = document.head.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    if (favicon) favicon.href = logoUrl;
+    const touchIcon = document.head.querySelector<HTMLLinkElement>('link[rel="apple-touch-icon"]');
+    if (touchIcon) touchIcon.href = logoUrl;
+    // Raster-only environments can't render SVG icons; add a PNG fallback link
+    // whenever the admin logo is a raster image.
+    if (/\.(png|jpe?g|webp)(\?|$)/i.test(logoUrl)) {
+      let fallback = document.head.querySelector<HTMLLinkElement>('link[rel="icon"][type="image/png"]');
+      if (!fallback) {
+        fallback = document.createElement("link");
+        fallback.rel = "icon";
+        fallback.type = "image/png";
+        document.head.appendChild(fallback);
+      }
+      fallback.href = logoUrl;
+    }
+  }, [logoUrl]);
 
   const value = useMemo<ShopContextValue>(
     () => ({
@@ -82,7 +108,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       t: (key: TranslationKey) => translate(locale, key),
       money: (amountBdt: number) => formatMoney(amountBdt, currency, usdRate),
       storeName: config?.storeName ?? "NABILA FASHION",
-      logoUrl: config?.logoUrl ?? "/auravelle-mark.svg",
+      logoUrl,
       announcement: config?.announcement ?? "",
       supportPhone: config?.supportPhone ?? "+8801700000000",
       whatsappNumber: config?.whatsappNumber ?? config?.supportPhone ?? "+8801700000000",
