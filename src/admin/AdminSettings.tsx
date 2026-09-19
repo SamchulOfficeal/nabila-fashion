@@ -46,6 +46,7 @@ export function AdminSettings() {
   const [logoUploading, setLogoUploading] = useState(false);
   const prefilled = useRef(false);
   const [chatEnabled, setChatEnabled] = useState(true);
+  const [codEnabled, setCodEnabled] = useState(true);
   const [bkashEnabled, setBkashEnabled] = useState(false);
   const [nagadEnabled, setNagadEnabled] = useState(false);
   const [courierPathaoEnabled, setCourierPathaoEnabled] = useState(false);
@@ -57,6 +58,7 @@ export function AdminSettings() {
     setValues(settings as unknown as Record<string, string>);
     setAnnouncement(settings.announcement);
     setChatEnabled(settings.chatEnabled !== false && settings.chatEnabled !== "false");
+    setCodEnabled(settings.paymentCodEnabled !== false && settings.paymentCodEnabled !== "false");
     setBkashEnabled(settings.paymentBkashEnabled === true || settings.paymentBkashEnabled === "true");
     setNagadEnabled(settings.paymentNagadEnabled === true || settings.paymentNagadEnabled === "true");
     setCourierPathaoEnabled(settings.courierPathaoEnabled === true || settings.courierPathaoEnabled === "true");
@@ -76,6 +78,7 @@ export function AdminSettings() {
           { key: "announcement", value: announcement },
           { key: "chatSystemPrompt", value: values.chatSystemPrompt ?? `You are a helpful customer care assistant for ${storeName}.` },
           { key: "chatEnabled", value: chatEnabled ? "true" : "false" },
+          { key: "paymentCodEnabled", value: codEnabled ? "true" : "false" },
           { key: "paymentBkashEnabled", value: bkashEnabled ? "true" : "false" },
           { key: "paymentNagadEnabled", value: nagadEnabled ? "true" : "false" },
           { key: "courierPathaoEnabled", value: courierPathaoEnabled ? "true" : "false" },
@@ -208,6 +211,25 @@ export function AdminSettings() {
               </h2>
             </div>
             <div className="mt-4 space-y-4">
+              {/* Cash on delivery — the only method that needs no number. */}
+              <div className="rounded-2xl bg-muted/50 p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="cod-toggle" className="text-xs font-semibold">
+                    Cash on delivery
+                  </Label>
+                  <Switch
+                    id="cod-toggle"
+                    checked={codEnabled}
+                    onCheckedChange={(checked) => setCodEnabled(checked)}
+                    className="cursor-pointer"
+                  />
+                </div>
+                <p className="mt-1.5 text-[11px] leading-4 text-muted-foreground">
+                  When off, customers can only pay with the methods enabled below
+                  (bKash/Nagad/store balance) — the COD option disappears from
+                  checkout entirely.
+                </p>
+              </div>
               {[
                 { id: "bkash", label: "bKash", enabled: bkashEnabled, setEnabled: setBkashEnabled, numberKey: "paymentBkashNumber" },
                 { id: "nagad", label: "Nagad", enabled: nagadEnabled, setEnabled: setNagadEnabled, numberKey: "paymentNagadNumber" },

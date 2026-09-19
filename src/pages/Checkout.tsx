@@ -29,6 +29,7 @@ import {
   ShieldCheck,
   Tag,
   Truck,
+  Wallet,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -53,8 +54,30 @@ export default function Checkout() {
     note: "",
     resellerCode: "",
   });
-  const [payment, setPayment] = useState<"cod" | "bkash" | "nagad">("cod");
-  const { paymentBkashEnabled, paymentBkashNumber, paymentNagadEnabled, paymentNagadNumber } = useShop();
+  const [payment, setPayment] = useState<"cod" | "bkash" | "nagad" | "balance">("cod");
+  const { paymentBkashEnabled, paymentBkashNumber, paymentNagadEnabled, paymentNagadNumber, paymentCodEnabled } = useShop();
+  const wallet = useQuery(api.balance.myBalance);
+  const balance = wallet?.balance ?? 0;
+
+  /** Payment methods actually enabled by the admin (Settings → Payments).
+      A method the admin turned off NEVER appears — not even disabled. */
+  const availableMethods = useMemo(() => {
+    const methods: Array<"cod" | "bkash" | "nagad" | "balance"> = [];
+    if (paymentCodEnabled) methods.push("cod");
+    if (paymentBkashEnabled) methods.push("bkash");
+    if (paymentNagadEnabled) methods.push("nagad");
+    methods.push("balance"); // always visible so customers learn about it; gated by funds at submit
+    return methods;
+  }, [paymentCodEnabled, paymentBkashEnabled, paymentNagadEnabled]);
+
+  // If the currently selected method was disabled by the admin (or balance ran
+  // short), fall back to the first available one so submit never 403s.
+  useEffect(() => {
+    if (!availableMethods.includes(payment)) {
+      setPayment(availableMethods[0] ?? "cod");
+    }
+  }, [availableMethods, payment]);
+
   const [paymentReference, setPaymentReference] = useState("");
   const [codeInput, setCodeInput] = useState("");
   const [appliedCode, setAppliedCode] = useState("");
@@ -99,7 +122,7 @@ export default function Checkout() {
     if (address.length < 10 || !/[A-Za-z\u0980-\u09FF]/.test(address)) {
       found.address = "Enter a complete address with house, road or area details.";
     }
-    if (payment !== "cod") {
+    if (payment !== "cod" && payment !== "balance") {
       const ref = paymentReference.trim();
       const looksLikeTxn = /^[A-Za-z0-9]{6,20}$/.test(ref);
       const looksLikePhone = /^01[3-9]\d{8}$/.test(ref.replace(/\D/g, ""));
@@ -140,6 +163,7 @@ export default function Checkout() {
   const delivery = form.division ? deliveryChargeFor(form.division, subtotal) : 0;
   const discount = coupon?.ok ? coupon.discount : 0;
   const total = Math.max(0, subtotal + delivery - discount);
+  const balanceCovers = balance >= total;
   const remaining = Math.max(0, freeDeliveryThreshold - subtotal);
 
   const districts = useMemo(() => districtsFor(form.division), [form.division]);
@@ -210,12 +234,18 @@ export default function Checkout() {
         couponCode: coupon?.ok ? appliedCode : undefined,
         resellerCode: form.resellerCode.trim() || undefined,
         paymentMethod: payment,
-        paymentReference: payment !== "cod" ? paymentReference.trim() || undefined : undefined,
+        paymentReference: payment !== "cod" && payment !== "balance" ? paymentReference.trim() || undefined : undefined,
         acceptedTerms,
       });
 
       const methodLabel =
-        payment === "bkash" ? "bKash" : payment === "nagad" ? "Nagad" : "Cash on delivery";
+        payment === "bkash"
+          ? "bKash"
+          : payment === "nagad"
+            ? "Nagad"
+            : payment === "balance"
+              ? "Store balance"
+              : "Cash on delivery";
       toast.success(`${t("checkout.success")} · ${result.orderNumber}`, {
         description: `৳${result.total.toLocaleString()} · ${methodLabel}${payment === "cod" ? " payable on delivery." : "."}`,
       });
@@ -432,65 +462,96 @@ export default function Checkout() {
               Payment method
             </h2>
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
-              <button
-                type="button"
-                onClick={() => setPayment("cod")}
-                className={cn(
-                  "cursor-pointer rounded-2xl border p-4 text-left transition-colors",
-                  payment === "cod"
-                    ? "border-primary bg-brand-blush/60"
-                    : "border-border/60 hover:bg-accent",
-                )}
-              >
-                <span className="flex items-center gap-2 font-medium">
-                  <Banknote className="size-4 text-primary" strokeWidth={1.8} />
-                  {t("checkout.cod")}
-                  {payment === "cod" && (
-                    <BadgeCheck className="ml-auto size-4 text-primary" strokeWidth={1.8} />
-                  )}
-                </span>
-                <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">
-                  {t("checkout.codHint")}
-                </span>
-              </button>
-              {[
-                { id: "bkash" as const, enabled: paymentBkashEnabled, number: paymentBkashNumber, label: "bKash", color: "text-[#d12053]" },
-                { id: "nagad" as const, enabled: paymentNagadEnabled, number: paymentNagadNumber, label: "Nagad", color: "text-[#f6921e]" },
-              ].map((msf) => (
+              {/* Only admin-enabled methods render (see availableMethods). */}
+              {paymentCodEnabled && (
                 <button
-                  key={msf.id}
                   type="button"
-                  disabled={!msf.enabled}
-                  onClick={() => setPayment(msf.id)}
+                  onClick={() => setPayment("cod")}
                   className={cn(
-                    "rounded-2xl border p-4 text-left transition-colors",
-                    !msf.enabled && "cursor-not-allowed opacity-60",
-                    msf.enabled && payment === msf.id
+                    "cursor-pointer rounded-2xl border p-4 text-left transition-colors",
+                    payment === "cod"
                       ? "border-primary bg-brand-blush/60"
                       : "border-border/60 hover:bg-accent",
                   )}
                 >
                   <span className="flex items-center gap-2 font-medium">
-                    <CreditCard className={cn("size-4", msf.enabled ? msf.color : "text-muted-foreground")} strokeWidth={1.8} />
-                    {msf.label}
-                    {payment === msf.id && (
+                    <Banknote className="size-4 text-primary" strokeWidth={1.8} />
+                    {t("checkout.cod")}
+                    {payment === "cod" && (
                       <BadgeCheck className="ml-auto size-4 text-primary" strokeWidth={1.8} />
                     )}
                   </span>
                   <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">
-                    {msf.enabled
-                      ? `Send payment to ${msf.number}, then place the order — we confirm by phone.`
-                      : "Enable bKash/Nagad from Admin → Settings → Payments."}
+                    {t("checkout.codHint")}
                   </span>
                 </button>
-              ))}
+              )}
+              {([
+                { id: "bkash" as const, enabled: paymentBkashEnabled, number: paymentBkashNumber, label: "bKash", color: "text-[#d12053]" },
+                { id: "nagad" as const, enabled: paymentNagadEnabled, number: paymentNagadNumber, label: "Nagad", color: "text-[#f6921e]" },
+              ] as const)
+                .filter((msf) => msf.enabled)
+                .map((msf) => (
+                  <button
+                    key={msf.id}
+                    type="button"
+                    onClick={() => setPayment(msf.id)}
+                    className={cn(
+                      "cursor-pointer rounded-2xl border p-4 text-left transition-colors",
+                      payment === msf.id
+                        ? "border-primary bg-brand-blush/60"
+                        : "border-border/60 hover:bg-accent",
+                    )}
+                  >
+                    <span className="flex items-center gap-2 font-medium">
+                      <CreditCard className={cn("size-4", msf.color)} strokeWidth={1.8} />
+                      {msf.label}
+                      {payment === msf.id && (
+                        <BadgeCheck className="ml-auto size-4 text-primary" strokeWidth={1.8} />
+                      )}
+                    </span>
+                    <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">
+                      Send payment to {msf.number}, then place the order — we confirm by phone.
+                    </span>
+                  </button>
+                ))}
+              {/* Store balance — always offered; funds verified at submit. */}
+              <button
+                type="button"
+                onClick={() => setPayment("balance")}
+                className={cn(
+                  "cursor-pointer rounded-2xl border p-4 text-left transition-colors",
+                  payment === "balance"
+                    ? "border-primary bg-brand-blush/60"
+                    : "border-border/60 hover:bg-accent",
+                )}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Wallet className="size-4 text-primary" strokeWidth={1.8} />
+                  Store balance
+                  <span className={cn("ml-auto text-xs font-semibold", balance > 0 ? "text-primary" : "text-muted-foreground")}>
+                    {money(balance)}
+                  </span>
+                </span>
+                <span className="mt-1.5 block text-xs leading-5 text-muted-foreground">
+                  {balanceCovers
+                    ? "Pay instantly from your topped-up balance."
+                    : balance > 0
+                      ? `৳${Math.max(0, total - balance).toLocaleString()} short — top up from your Account page or pay another way.`
+                      : "Your balance is empty — top up from the Account page first."}
+                </span>
+              </button>
             </div>
-            <p className="mt-4 flex items-center gap-2 text-[11px] text-muted-foreground">
-              <ShieldCheck className="size-3.5 text-primary" strokeWidth={1.8} />
-              Your order is verified by phone before dispatch. No card details are ever
-              stored.
-              {payment !== "cod" && (
-                <div className="mt-3 space-y-1.5">
+            <div className="mt-4 space-y-3">
+              {payment === "balance" && !balanceCovers && (
+                <div className="flex items-start gap-2 rounded-xl bg-amber-500/10 px-3 py-2.5 text-[11px] leading-5 text-amber-700 dark:text-amber-300">
+                  <AlertCircle className="mt-0.5 size-3.5 shrink-0" strokeWidth={1.8} />
+                  Your balance does not cover this order yet. Top up from Account → Store
+                  balance, or pick another payment method.
+                </div>
+              )}
+              {payment !== "cod" && payment !== "balance" && (
+                <div className="space-y-1.5">
                   <Label htmlFor="paymentReference">
                     {payment === "bkash" ? "bKash" : "Nagad"} transaction ID / sender number
                   </Label>
@@ -509,7 +570,11 @@ export default function Checkout() {
                   {errors.paymentReference && <FieldError message={errors.paymentReference} />}
                 </div>
               )}
-            </p>
+              <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                <ShieldCheck className="size-3.5 shrink-0 text-primary" strokeWidth={1.8} />
+                Your order is verified by phone before dispatch. No card details are ever stored.
+              </p>
+            </div>
           </section>
         </div>
 

@@ -128,6 +128,9 @@ const DEFAULT_SETTINGS: AnyRecord = {
   paymentBkashType: "merchant",
   paymentNagadEnabled: false,
   paymentNagadNumber: "",
+  // Cash on delivery is the default rail; the admin can switch it off from
+  // Settings → Payments (e.g. balance/prepaid-only periods).
+  paymentCodEnabled: true,
   // Courier integrations (Pathao/Steadfast). Parcel is dispatched over the
   // phone network today; consignment numbers attach to orders when keys exist.
   courierPathaoEnabled: false,
@@ -239,6 +242,23 @@ async function placeOrder(args: AnyRecord) {
   const user = await requireProfile();
   if (args.acceptedTerms !== true) throw new Error("Please accept the terms & conditions to place your order.");
   if (!divisionNames().includes(args.division)) throw new Error("Please choose a valid delivery division.");
+
+  // Payment method gate: the customer can only pay through methods the admin
+  // actually enabled in Settings. COD requires the codEnabled flag; bKash/Nagad
+  // require their own flags. The "balance" method additionally checks funds.
+  const settingsRows = await all("settings");
+  const settingValue = (key: string) => settingsRows.find((item) => item.key === key)?.value;
+  const flagOn = (key: string, fallback: boolean) => {
+    const raw = settingValue(key);
+    return raw === undefined ? fallback : raw === true || raw === "true";
+  };
+  const codEnabled = flagOn("paymentCodEnabled", true);
+  const bkashEnabled = flagOn("paymentBkashEnabled", false);
+  const nagadEnabled = flagOn("paymentNagadEnabled", false);
+  const method = ["cod", "bkash", "nagad", "balance"].includes(args.paymentMethod) ? args.paymentMethod : "cod";
+  if (method === "cod" && !codEnabled) throw new Error("Cash on delivery is currently unavailable. Choose another payment method.");
+  if (method === "bkash" && !bkashEnabled) throw new Error("bKash payment is currently unavailable.");
+  if (method === "nagad" && !nagadEnabled) throw new Error("Nagad payment is currently unavailable.");
   const phoneDigits = clean(args.phone).replace(/\D/g, "");
   const phone = phoneDigits.startsWith("88") && phoneDigits.length === 13 ? phoneDigits.slice(2) : phoneDigits;
   if (!/^01[3-9]\d{8}$/.test(phone)) throw new Error("Enter an 11 digit mobile number starting with 01, e.g. 01712345678.");
@@ -260,8 +280,8 @@ async function placeOrder(args: AnyRecord) {
 
   const applied = args.couponCode ? await validateCoupon(args.couponCode, cartSnapshot.reduce((sum, item) => sum + effectivePrice(productSnapshots.get(item.productId)!) * item.quantity, 0)) : null;
   // Validate the bKash/Nagad reference server-side instead of trusting the client.
-  const paymentReference = args.paymentMethod === "bkash" || args.paymentMethod === "nagad"
-    ? (() => { const ref = clean(args.paymentReference, 60); if (!(/^[A-Za-z0-9]{6,20}$/.test(ref) || /^01[3-9]\d{8}$/.test(ref.replace(/\D/g, "")))) throw new Error(`Enter the ${args.paymentMethod === "bkash" ? "bKash" : "Nagad"} transaction ID or the mobile number you paid from.`); return ref; })()
+  const paymentReference = method === "bkash" || method === "nagad"
+    ? (() => { const ref = clean(args.paymentReference, 60); if (!(/^[A-Za-z0-9]{6,20}$/.test(ref) || /^01[3-9]\d{8}$/.test(ref.replace(/\D/g, "")))) throw new Error(`Enter the ${method === "bkash" ? "bKash" : "Nagad"} transaction ID or the mobile number you paid from.`); return ref; })()
     : "";
   const createdAt = now();
   const result = await runTransaction(db, async (transaction) => {
@@ -282,12 +302,24 @@ async function placeOrder(args: AnyRecord) {
     const deliveryCharge = deliveryChargeFor(args.division, subtotal);
     const discount = applied?.discount ?? 0;
     const total = Math.max(0, subtotal + deliveryCharge - discount);
+
+    // Balance payment: deduct atomically INSIDE the transaction, computed from
+    // the authoritative ledger (approved top-ups minus live balance orders).
+    let balancePaid = 0;
+    if (method === "balance") {
+      const approvedTopups = (await getDocs(query(table("balanceTopups"), where("userId", "==", user._id), where("status", "==", "approved")))).docs.reduce((sum, row) => sum + (row.data().amount ?? 0), 0);
+      const spentOnOrders = (await getDocs(query(table("orders"), where("userId", "==", user._id), where("paymentMethod", "==", "balance")))).docs.filter((row) => row.data().status !== "cancelled").reduce((sum, row) => sum + (row.data().total ?? 0), 0);
+      const available = approvedTopups - spentOnOrders;
+      if (available < total) throw new Error(`Not enough balance. Available ৳${Math.max(0, Math.floor(available)).toLocaleString()}, order total ৳${total.toLocaleString()}. Top up or choose cash on delivery.`);
+      balancePaid = total;
+    }
+
     const orderRef = doc(collection(db, "orders"));
     const order = {
       orderNumber: orderNumber(), userId: user._id, customerName, customerEmail: user.email ?? "", phone,
       division: args.division, district, address, note: args.note ? clean(args.note, 240) : "",
       items, subtotal, deliveryCharge, discount, total, couponCode: applied?.code ?? "", resellerCode: clean(args.resellerCode, 24).toUpperCase(),
-      paymentMethod: args.paymentMethod ?? "cod", paymentStatus: "unpaid", status: "pending", statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }], currency: "BDT", paymentReference, acceptedTerms: true, courierName: "", consignmentCode: "", createdAt,
+      paymentMethod: method, paymentStatus: balancePaid > 0 ? "paid" : "unpaid", status: "pending", statusHistory: [{ status: "pending", at: createdAt, note: "Order placed" }], currency: "BDT", paymentReference, acceptedTerms: true, courierName: "", consignmentCode: "", createdAt,
     };
     transaction.set(orderRef, order);
     for (const item of cartSnapshot) {
@@ -303,7 +335,7 @@ async function placeOrder(args: AnyRecord) {
       const coupons = await getDocs(query(table("coupons"), where("code", "==", applied.code), limit(1)));
       if (!coupons.empty) transaction.update(coupons.docs[0].ref, { usedCount: (coupons.docs[0].data().usedCount ?? 0) + 1 });
     }
-    transaction.set(doc(collection(db, "notifications")), { type: "order", title: `New order ${order.orderNumber}`, message: `${order.customerName} · ৳${total.toLocaleString()} COD`, orderId: orderRef.id, isRead: false, createdAt });
+    transaction.set(doc(collection(db, "notifications")), { type: "order", title: `New order ${order.orderNumber}`, message: `${order.customerName} · ৳${total.toLocaleString()} ${method === "cod" ? "COD" : method.toUpperCase()}`, orderId: orderRef.id, isRead: false, createdAt });
     return { orderId: orderRef.id, orderNumber: order.orderNumber, total, deliveryCharge, discount, subtotal };
   });
   return result;
@@ -361,7 +393,7 @@ async function overview() {
 export async function runQuery(path: FirebaseApiPath, args: AnyRecord = {}) {
   const [module, operation] = path.split(".");
   switch (`${module}.${operation}`) {
-    case "settings.publicConfig": { const rows = await all("settings"); const values = { ...DEFAULT_SETTINGS, ...Object.fromEntries(rows.map((row) => [row.key, row.value])) }; return { storeName: values.storeName, logoUrl: values.logoUrl, announcement: values.announcement, supportPhone: values.supportPhone, whatsappNumber: values.whatsappNumber, chatEnabled: values.chatEnabled !== false && values.chatEnabled !== "false", chatGreeting: values.chatGreeting, usdRate: Number(values.usdRate) || 120, freeDeliveryThreshold: Number(values.freeDeliveryThreshold) || 4000, paymentBkashEnabled: values.paymentBkashEnabled === true || values.paymentBkashEnabled === "true", paymentBkashNumber: values.paymentBkashNumber ?? "", paymentNagadEnabled: values.paymentNagadEnabled === true || values.paymentNagadEnabled === "true", paymentNagadNumber: values.paymentNagadNumber ?? "" }; }
+    case "settings.publicConfig": { const rows = await all("settings"); const values = { ...DEFAULT_SETTINGS, ...Object.fromEntries(rows.map((row) => [row.key, row.value])) }; return { storeName: values.storeName, logoUrl: values.logoUrl, announcement: values.announcement, supportPhone: values.supportPhone, whatsappNumber: values.whatsappNumber, chatEnabled: values.chatEnabled !== false && values.chatEnabled !== "false", chatGreeting: values.chatGreeting, usdRate: Number(values.usdRate) || 120, freeDeliveryThreshold: Number(values.freeDeliveryThreshold) || 4000, paymentCodEnabled: values.paymentCodEnabled !== false && values.paymentCodEnabled !== "false", paymentBkashEnabled: values.paymentBkashEnabled === true || values.paymentBkashEnabled === "true", paymentBkashNumber: values.paymentBkashNumber ?? "", paymentNagadEnabled: values.paymentNagadEnabled === true || values.paymentNagadEnabled === "true", paymentNagadNumber: values.paymentNagadNumber ?? "" }; }
     case "settings.raw": { const rows = await all("settings"); return { ...DEFAULT_SETTINGS, ...Object.fromEntries(rows.map((row) => [row.key, row.value])) }; }
     case "catalog.list": return await products(args);
     case "catalog.featured": return await products({ ...args, featuredOnly: true });
@@ -401,6 +433,8 @@ export async function runQuery(path: FirebaseApiPath, args: AnyRecord = {}) {
     case "notifications.myUnreadCount": { const profile = await ensureProfile(); if (!profile) return 0; const myUnread = await getDocs(query(table("notifications"), where("userId", "==", profile._id), where("isRead", "==", false))); return myUnread.size; }
     case "reviews.forProduct": return (await all("reviews")).filter((item) => item.productId === args.productId).sort((a, b) => b.createdAt - a.createdAt);
     case "reviews.canReview": { const profile = await ensureProfile(); if (!profile) return false; const orders = (await all("orders")).filter((item) => item.userId === profile._id && item.status === "delivered"); return orders.some((order) => order.items?.some((item: AnyRecord) => item.productId === args.productId)); }
+    case "balance.myBalance": { const profile = await ensureProfile(); if (!profile) return { balance: 0, topups: [] }; const approvedRows = (await all("balanceTopups")).filter((item) => item.userId === profile._id && item.status === "approved"); const balance = approvedRows.reduce((sum, item) => sum + item.amount, 0) - (await all("orders")).filter((item) => item.userId === profile._id && item.paymentMethod === "balance" && item.status !== "cancelled").reduce((sum, item) => sum + item.total, 0); const topups = (await all("balanceTopups")).filter((item) => item.userId === profile._id).sort((a, b) => b.createdAt - a.createdAt).slice(0, 10); return { balance, topups }; }
+    case "balance.staffList": { await requireProfile(["admin", "manager"]); const users = await all("users"); return (await all("balanceTopups")).sort((a, b) => b.createdAt - a.createdAt).slice(0, 60).map((item) => ({ ...item, userName: users.find((user) => user._id === item.userId)?.name ?? "Customer", userEmail: users.find((user) => user._id === item.userId)?.email ?? "" })); }
     default: return undefined;
   }
 }
@@ -427,6 +461,8 @@ async function runMutationInner(path: FirebaseApiPath, args: AnyRecord = {}) {
     case "wishlist.toggle": { const profile = await requireProfile(); const rows = (await all("wishlistItems")).filter((item) => item.userId === profile._id && item.productId === args.productId); if (rows[0]) { await deleteDoc(document("wishlistItems", rows[0]._id)); return false; } await addDoc(table("wishlistItems"), { userId: profile._id, productId: args.productId, addedAt: now() }); return true; }
     case "wishlist.remove": { const profile = await requireProfile(); const item = await getDoc(document("wishlistItems", args.itemId)); if (!item.exists() || item.data().userId !== profile._id) throw new Error("Item not found."); return deleteDoc(item.ref); }
     case "orders.placeOrder": rateLimit("placeOrder", 5); return placeOrder(args);
+    case "balance.requestTopup": { rateLimit("requestTopup", 3); const profile = await requireProfile(); const amount = Math.round(Number(args.amount)); if (!Number.isFinite(amount) || amount < 100) throw new Error("Minimum top-up amount is ৳100."); if (amount > 50000) throw new Error("Maximum top-up amount is ৳50,000 per request."); const reference = clean(args.reference, 40).replace(/\s+/g, ""); if (reference.length < 6) throw new Error("Enter the bKash/Nagad transaction ID or sender number."); await addDoc(table("balanceTopups"), { userId: profile._id, amount, method: ["bkash", "nagad", "bank"].includes(args.method) ? args.method : "bkash", reference, status: "pending", createdAt: now() }); await addDoc(table("notifications"), { type: "message", title: "New balance top-up", message: `${profile.name ?? profile.email ?? "Customer"} sent ৳${amount.toLocaleString()} via ${String(args.method).toUpperCase()}.`, isRead: false, createdAt: now() }); return { ok: true }; }
+    case "balance.reviewTopup": { const admin = await requireProfile(["admin", "manager"]); const topupRef = document("balanceTopups", args.topupId); const snap = await getDoc(topupRef); if (!snap.exists()) throw new Error("Top-up request not found."); const row = withId(snap); if (args.decision === "approve") { if (row.status !== "pending") throw new Error("Only pending requests can be approved."); await runTransaction(db, async (transaction) => { transaction.update(topupRef, { status: "approved", reviewedBy: admin._id, reviewedAt: now() }); transaction.set(doc(collection(db, "notifications")), { type: "message", title: "Balance added", message: `৳${row.amount.toLocaleString()} was added to your store balance.`, userId: row.userId, isRead: false, createdAt: now() }); }); return { ok: true }; } if (args.decision === "reject") { if (row.status !== "pending") throw new Error("Only pending requests can be rejected."); await updateDoc(topupRef, { status: "rejected", note: args.note ? clean(args.note, 160) : "", reviewedBy: admin._id, reviewedAt: now() }); return { ok: true }; } throw new Error("Unknown decision."); }
     case "orders.setCourierInfo": { await requireProfile(["admin", "manager"]); const courierOrderRef = document("orders", args.orderId); const patch: AnyRecord = {}; if (args.courierName !== undefined) patch.courierName = clean(args.courierName, 60); if (args.consignmentCode !== undefined) patch.consignmentCode = clean(args.consignmentCode, 40); if (!Object.keys(patch).length) return; return updateDoc(courierOrderRef, patch); }
     case "orders.updateStatus": { const staff = await requireProfile(["admin", "manager"]); const orderRef = document("orders", args.orderId); const result = await runTransaction(db, async (transaction) => { const snapshot = await transaction.get(orderRef); if (!snapshot.exists()) throw new Error("Order not found."); const order = withId(snapshot); const history = [...(order.statusHistory ?? []), { status: args.status, at: now(), note: args.note ? clean(args.note, 160) : undefined }]; if (args.status === "cancelled" && order.status !== "cancelled") for (const item of order.items ?? []) { const productRef = document("products", item.productId); const productSnapshot = await transaction.get(productRef); if (productSnapshot.exists()) { const product = productSnapshot.data(); transaction.update(productRef, { stock: (product.stock ?? 0) + item.quantity, soldCount: Math.max(0, (product.soldCount ?? 0) - item.quantity) }); } } transaction.update(orderRef, { status: args.status, statusHistory: history, paymentStatus: args.paymentStatus ?? (args.status === "delivered" && order.paymentMethod === "cod" ? "paid" : order.paymentStatus) }); transaction.set(doc(collection(db, "notifications")), { type: "order", title: `${order.orderNumber} → ${args.status}`, message: `${staff.name ?? "Staff"} updated the order status`, orderId: args.orderId, isRead: false, createdAt: now() }); transaction.set(doc(collection(db, "notifications")), { type: "order", title: `${order.orderNumber} · ${args.status}`, message: `Your order status changed to ${args.status}.`, userId: order.userId, orderId: args.orderId, isRead: false, createdAt: now() }); return true; }); return result; }
     case "admin.setRole": { const admin = await requireProfile(["admin"]); const target = await getDoc(document("users", args.userId)); if (!target.exists()) throw new Error("User not found."); if (args.userId === admin._id && args.role !== "admin") throw new Error("You cannot remove your own administrator access."); const data = target.data(); const role = args.role; const patch: AnyRecord = { role }; if (role === "reseller" && !data.referralCode) patch.referralCode = `${clean(data.name || "NABI", 4).replace(/[^A-Za-z]/g, "").toUpperCase() || "NABI"}${Math.random().toString(36).slice(2, 6).toUpperCase()}`; return updateDoc(target.ref, patch); }

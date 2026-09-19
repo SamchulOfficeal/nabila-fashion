@@ -29,6 +29,7 @@ type ShopContextValue = {
   paymentBkashNumber: string;
   paymentNagadEnabled: boolean;
   paymentNagadNumber: string;
+  paymentCodEnabled: boolean;
 };
 
 const ShopContext = createContext<ShopContextValue | null>(null);
@@ -44,6 +45,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
     chatEnabled?: boolean | string;
     chatGreeting?: string;
     freeDeliveryThreshold?: number;
+    paymentCodEnabled?: boolean | string;
     paymentBkashEnabled?: boolean | string;
     paymentBkashNumber?: string;
     paymentNagadEnabled?: boolean | string;
@@ -119,6 +121,7 @@ export function ShopProvider({ children }: { children: ReactNode }) {
       paymentBkashNumber: config?.paymentBkashNumber ?? "",
       paymentNagadEnabled: config?.paymentNagadEnabled === true || config?.paymentNagadEnabled === "true",
       paymentNagadNumber: config?.paymentNagadNumber ?? "",
+      paymentCodEnabled: config?.paymentCodEnabled !== false && config?.paymentCodEnabled !== "false",
     }),
     [config, currency, locale, theme, setCurrency, setLocale, toggleTheme, usdRate],
   );

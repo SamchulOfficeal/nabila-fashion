@@ -53,11 +53,28 @@ const AdminResellers = lazy(() =>
 );
 const ResellerDashboard = lazy(() => import("./pages/ResellerDashboard.tsx"));
 
-// Simple loading fallback for route transitions
+// Branded route-loading fallback — keeps the storefront skeleton (header,
+// promo line) painted during chunk loads so navigation never flashes blank.
 function RouteLoading() {
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <div className="animate-pulse text-muted-foreground">Loading…</div>
+    <div className="min-h-screen">
+      <div className="border-b border-border/40 bg-background/80 backdrop-blur">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 md:px-6 lg:px-8">
+          <div className="h-6 w-36 animate-pulse rounded bg-muted" />
+          <div className="hidden gap-6 md:flex">
+            <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+            <div className="h-4 w-20 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="size-9 animate-pulse rounded-full bg-muted" />
+            <div className="size-9 animate-pulse rounded-full bg-muted" />
+          </div>
+        </div>
+      </div>
+      <div className="mx-auto max-w-7xl px-4 py-16 md:px-6 lg:px-8">
+        <div className="h-64 animate-pulse rounded-3xl bg-muted" />
+      </div>
     </div>
   );
 }

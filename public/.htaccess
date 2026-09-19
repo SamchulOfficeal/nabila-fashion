@@ -1,0 +1,54 @@
+# NABILA FASHION — Apache shared hosting (cPanel) config
+# Upload the contents of dist/ to public_html (or a subfolder) together with
+# this file. Requires mod_rewrite (standard on all cPanel hosts).
+
+# ---------------------------------------------------------------- SPA routing
+# Any URL that is not a real file/directory serves index.html, so deep links
+# like /product/saree-xyz or /orders load correctly after a full page refresh.
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+
+  # Never rewrite real files or folders (assets, .htaccess itself, uploads).
+  RewriteCond %{REQUEST_FILENAME} -f [OR]
+  RewriteCond %{REQUEST_FILENAME} -d
+  RewriteRule ^ - [L]
+
+  # Fallback everything else to the app shell.
+  RewriteRule ^ index.html [L]
+</IfModule>
+
+# ---------------------------------------------------------------- compression
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css text/javascript
+  AddOutputFilterByType DEFLATE application/javascript application/json
+  AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# ------------------------------------------------------------------ caching
+# Hashed assets are immutable — cache them for a year.
+<IfModule mod_expires.c>
+  ExpiresActive On
+  ExpiresByType text/css "access plus 1 year"
+  ExpiresByType application/javascript "access plus 1 year"
+  ExpiresByType image/svg+xml "access plus 1 month"
+  ExpiresByType image/webp "access plus 1 year"
+  ExpiresByType image/jpeg "access plus 1 year"
+  ExpiresByType image/png "access plus 1 year"
+  ExpiresByType font/woff2 "access plus 1 year"
+  # The shell must always be fresh so new deploys are picked up instantly.
+  ExpiresByType text/html "access plus 0 seconds"
+</IfModule>
+
+# ------------------------------------------------------------------ security
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+  Header set Permissions-Policy "geolocation=(self), camera=(), microphone=()"
+</IfModule>
+
+# Block dotfiles (.env, .git, …) from being served.
+<FilesMatch "^\.">
+  Require all denied
+</FilesMatch>
